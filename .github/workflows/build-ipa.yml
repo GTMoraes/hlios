@@ -1,0 +1,81 @@
+name: Gerar app (TestFlight)
+
+# Cada push gera uma build e manda ao TestFlight (mudança só em .md não gera).
+# Sem push, dá para rodar à mão: Actions > Gerar app (TestFlight) > Run workflow.
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versões fixadas
+        run: grep -E '^[A-Z0-9_]+=' versoes.env | tee -a "$GITHUB_ENV"
+
+      - name: Escolher o Xcode 26
+        run: bash scripts/escolher-xcode.sh
+
+      - name: Cache do SDL2
+        uses: actions/cache@v4
+        with:
+          path: deps/SDL2.framework
+          key: sdl2-${{ env.SDL_VERSAO }}-${{ env.XCODE_ESCOLHIDO }}
+
+      - name: SDL2 para iPhone
+        run: bash scripts/sdl2.sh
+
+      - name: Baixar o motor (Xash3D FWGS) e aplicar as mudanças
+        run: bash scripts/baixar-motor.sh
+
+      - name: Compilar o motor
+        run: bash scripts/compilar-motor.sh
+
+      - name: Compilar Half-Life, Blue Shift, Opposing Force e DMC
+        run: bash scripts/compilar-jogos.sh
+
+      - name: Compilar o Counter-Strike 1.6 (opcional)
+        continue-on-error: true
+        run: bash scripts/compilar-cs16.sh
+
+      - name: Montar o app
+        env:
+          BUILD: ${{ github.run_number }}
+          APP_ICON_PNG: ${{ secrets.APP_ICON_PNG }}
+        run: bash scripts/montar-app.sh
+
+      - name: Guardar o IPA (assinatura provisória)
+        uses: actions/upload-artifact@v4
+        with:
+          name: HalfLife-ipa-${{ github.run_number }}
+          path: trabalho/saida/*.ipa
+
+      # A assinatura é a gerenciada pela Apple (cloud signing): nenhum certificado no runner.
+      - name: Enviar ao TestFlight
+        env:
+          BUILD: ${{ github.run_number }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/enviar-testflight.sh
+
+      - name: Resumo dos erros (se falhar)
+        if: failure()
+        run: bash scripts/resumo-erros.sh
+
+      - name: Guardar os logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_number }}
+          path: logs/
+          if-no-files-found: ignore

@@ -1,0 +1,37 @@
+# saídas do build (no Actions ou numa máquina local)
+trabalho/
+logs/
+deps/
+build/
+*.ipa
+*.xcarchive
+
+# nada da Valve no repositório: arquivos do jogo, arte e o logo
+valve/
+valve_hd/
+gearbox/
+gearbox_hd/
+bshift/
+bshift_hd/
+cstrike/
+dmc/
+*.png
+*.ico
+*.wad
+*.bsp
+*.mdl
+*.pak
+
+# chaves e segredos
+*.p8
+*.p12
+*.mobileprovision
+.env
+.env.*
+
+# pastas de entrega
+PARA-A-PASTA-*/
+_subir/
+
+# python
+__pycache__/

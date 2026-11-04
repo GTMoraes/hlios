@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Modelo do Info.plist do app. scripts/info-plist.py preenche no build: bundle, versão,
+	     número da build, iOS mínimo, as chaves DT* do Xcode usado e o ícone (do actool). -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Half-Life</string>
+	<key>CFBundleExecutable</key>
+	<string>xash</string>
+	<key>CFBundleIdentifier</key>
+	<string>PREENCHIDO-NO-BUILD</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Half-Life</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>PREENCHIDO-NO-BUILD</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>iPhoneOS</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>PREENCHIDO-NO-BUILD</string>
+	<key>MinimumOSVersion</key>
+	<string>PREENCHIDO-NO-BUILD</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.action-games</string>
+	<!-- Modo Jogo do iOS: menos atividade em segundo plano, menos latência nos controles Bluetooth -->
+	<key>GCSupportsGameMode</key>
+	<true/>
+	<key>LSSupportsGameMode</key>
+	<true/>
+	<!-- só criptografia padrão: o TestFlight não pergunta de exportação a cada build -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- libera os 120 Hz da tela ProMotion (sem isto o iPhone limita o app a 60) -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<!-- a pasta Documentos (onde vão valve, gearbox, bshift...) aparece no app Arquivos -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<!-- textos das permissões que o motor e o SDL podem pedir -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Para usar controles Bluetooth.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Para achar e entrar em jogos na rede local.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para o chat de voz, se você ligar.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<!-- só iPhone: app de iPad sem as quatro orientações é recusado no envio (ITMS-90474) -->
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
+</dict>
+</plist>

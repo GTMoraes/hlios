@@ -1,0 +1,187 @@
+diff --git a/engine/platform/platform.h b/engine/platform/platform.h
+index 4b1e40c..e7e86f3 100644
+--- a/engine/platform/platform.h
++++ b/engine/platform/platform.h
+@@ -58,6 +58,7 @@ const char *IOS_GetDocsDir( void );
+ const char *IOS_GetExecDir( void );
+ void IOS_LaunchDialog( void );
+ void IOS_GetWindowInsets( void *window, float insets[4] );
++qboolean IOS_LibraryExists( const char *dllname ); // hlios: libraries packaged as frameworks
+ #endif // TARGET_OS_IOS
+ 
+ #if XASH_WIN32 || XASH_LINUX
+@@ -323,6 +324,11 @@ static inline qboolean Platform_LibraryExists( const char *name, qboolean gamedi
+ 	// game libraries can be shipped in the package, see lib_ps4.c
+ 	if( PS4_PackageLibraryExists( name ))
+ 		return true;
++#endif
++#if XASH_IOS
++	// hlios: game libraries live as frameworks inside the bundle, see lib_posix.c
++	if( IOS_LibraryExists( name ))
++		return true;
+ #endif
+ 	// FIXME: use FS_FindLibrary
+ 	return g_fsapi.FileExists( name, gamedironly );
+diff --git a/engine/platform/posix/lib_posix.c b/engine/platform/posix/lib_posix.c
+index 3698d2e..2af3f49 100644
+--- a/engine/platform/posix/lib_posix.c
++++ b/engine/platform/posix/lib_posix.c
+@@ -37,6 +37,131 @@ GNU General Public License for more details.
+ #include "server.h"
+ #include "platform/android/lib_android.h"
+ 
++#if XASH_IOS
++#include <sys/stat.h>
++
++/*
++==============
++IOS_FrameworkName
++
++hlios: App Store Connect refuses loose .dylib files inside an app (ITMS-90171), so the
++packaging (hlios scripts/embrulhar.py) moves every library to
++<bundle>/Frameworks/<name>.framework/<name>. <name> is the library path relative to the
++bundle, without the ".dylib" suffix, with each '/' turned into "__" and every character
++outside [A-Za-z0-9_-] turned into '_'. Both sides must derive the name the same way.
++==============
++*/
++static qboolean IOS_FrameworkName( const char *rel, char *out, size_t size )
++{
++	size_t len, i, j = 0;
++
++	while( rel[0] == '.' && ( rel[1] == '/' || rel[1] == '\\' ))
++		rel += 2;
++
++	len = Q_strlen( rel );
++
++	if( len > 6 && !Q_stricmp( rel + len - 6, ".dylib" ))
++		len -= 6;
++
++	for( i = 0; i < len; i++ )
++	{
++		const char c = rel[i];
++
++		if( j + 3 > size )
++			return false;
++
++		if( c == '/' || c == '\\' )
++		{
++			out[j++] = '_';
++			out[j++] = '_';
++		}
++		else if(( c >= 'a' && c <= 'z' ) || ( c >= 'A' && c <= 'Z' ) || ( c >= '0' && c <= '9' ) || c == '_' || c == '-' )
++			out[j++] = c;
++		else
++			out[j++] = '_';
++	}
++
++	out[j] = 0;
++	return j > 0;
++}
++
++static qboolean IOS_FrameworkPath( const char *rel, char *out, size_t size )
++{
++	char name[MAX_OSPATH];
++	struct stat st;
++
++	if( !IOS_FrameworkName( rel, name, sizeof( name )))
++		return false;
++
++	Q_snprintf( out, size, "%s/Frameworks/%s.framework/%s", IOS_GetExecDir(), name, name );
++
++	return stat( out, &st ) == 0 && S_ISREG( st.st_mode );
++}
++
++/*
++==============
++IOS_FindFramework
++
++Maps a library request of the engine to its framework inside the bundle
++==============
++*/
++static qboolean IOS_FindFramework( const char *dllname, char *out, size_t size )
++{
++	const char *bundle = IOS_GetExecDir();
++	const size_t bundlelen = Q_strlen( bundle );
++	char rel[MAX_OSPATH];
++
++	if( COM_StringEmptyOrNULL( dllname ) || COM_StringEmptyOrNULL( bundle ))
++		return false;
++
++	// absolute path: only the ones inside the app bundle
++	if( dllname[0] == '/' )
++	{
++		if( !Q_strncmp( dllname, bundle, bundlelen ) && dllname[bundlelen] == '/' )
++			return IOS_FrameworkPath( dllname + bundlelen + 1, out, size );
++
++		return false;
++	}
++
++	// bare file name: engine library at the bundle root (filesystem_stdio, ref_*, menu)
++	if( !Q_strchr( dllname, '/' ) && !Q_strchr( dllname, '\\' ))
++		return IOS_FrameworkPath( dllname, out, size );
++
++	// game library, relative to a game directory: the running game, its base game, then valve
++	// (the libraries in valve also serve mods that don't have their own, like Blue Shift)
++	if( FI != NULL && FI->GameInfo != NULL )
++	{
++		const char *dirs[3];
++		int i;
++
++		dirs[0] = FI->GameInfo->gamefolder;
++		dirs[1] = FI->GameInfo->basedir;
++		dirs[2] = "valve";
++
++		for( i = 0; i < 3; i++ )
++		{
++			if( COM_StringEmptyOrNULL( dirs[i] ))
++				continue;
++
++			Q_snprintf( rel, sizeof( rel ), "%s/%s", dirs[i], dllname );
++
++			if( IOS_FrameworkPath( rel, out, size ))
++				return true;
++		}
++	}
++
++	// maybe relative to the bundle already (e.g. -dll valve/dlls/hl_ios_arm64.dylib)
++	return IOS_FrameworkPath( dllname, out, size );
++}
++
++qboolean IOS_LibraryExists( const char *dllname )
++{
++	char path[MAX_OSPATH];
++
++	return IOS_FindFramework( dllname, path, sizeof( path ));
++}
++#endif // XASH_IOS
++
+ #ifdef XASH_NO_LIBDL
+ void *dlsym( void *handle, const char *symbol )
+ {
+@@ -284,6 +409,26 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
+ {
+ 	COM_ResetLibraryError();
+ 
++#if XASH_IOS
++	{
++		char fwpath[MAX_OSPATH];
++
++		if( IOS_FindFramework( dllname, fwpath, sizeof( fwpath )))
++		{
++			void *handle = dlopen( fwpath, RTLD_NOW );
++
++			if( handle )
++			{
++				Con_Reportf( "%s: %s -> %s\n", __func__, dllname, fwpath );
++				return handle;
++			}
++
++			COM_PushLibraryError( dlerror( ));
++			return NULL;
++		}
++	}
++#endif // XASH_IOS
++
+ 	// platforms where gameinfo mechanism is impossible
+ #ifdef Platform_POSIX_LoadLibrary
+ 	return Platform_POSIX_LoadLibrary( dllname );
