@@ -176,7 +176,7 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
 	NSString *touch = [dir stringByAppendingPathComponent:@"touch.cfg"];
-	NSString *botao = @"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 2 1 0\n";
+	NSString *botao = @"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n";
 	NSString *cfg = [NSString stringWithFormat:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
 		@"alias +pulolongo \"+duck;+jump\"\n"
 		@"alias -pulolongo \"-jump;-duck\"\n%@", botao];
@@ -194,11 +194,58 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	if( atual == nil )
 		atual = [NSString stringWithContentsOfFile:touch encoding:NSISOLatin1StringEncoding error:NULL];
 
-	if( atual != nil && [atual rangeOfString:@"pulolongo"].location == NSNotFound )
+	if( atual == nil )
+		return;
+
+	if( [atual rangeOfString:@"pulolongo"].location == NSNotFound )
 	{
 		NSString *novo = [atual hasSuffix:@"\n"] ? [atual stringByAppendingString:botao]
 			: [NSString stringWithFormat:@"%@\n%@", atual, botao];
 		[novo writeToFile:touch atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+		return;
+	}
+
+	// versões até a 0.1.3 criavam o botão com a marca "não editável" (flag 2): tira só essa marca,
+	// mantendo posição, tamanho e cor
+	{
+		NSArray *linhas = [atual componentsSeparatedByString:@"\n"];
+		NSMutableArray *saida = [NSMutableArray arrayWithCapacity:[linhas count]];
+		BOOL mudou = NO;
+
+		for( NSString *linha in linhas )
+		{
+			NSString *nova = linha;
+			NSString *limpa = [linha stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+			if( [limpa hasPrefix:@"touch_addbutton \"pulolongo\""] )
+			{
+				NSMutableArray *partes = [NSMutableArray array];
+
+				for( NSString *t in [limpa componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] )
+				{
+					if( [t length] > 0 )
+						[partes addObject:t];
+				}
+
+				// touch_addbutton nome textura comando x1 y1 x2 y2 r g b a flags [aspecto]
+				if( [partes count] >= 13 )
+				{
+					int flags = [[partes objectAtIndex:12] intValue];
+
+					if( flags & 2 )
+					{
+						[partes replaceObjectAtIndex:12 withObject:[NSString stringWithFormat:@"%d", flags & ~2]];
+						nova = [partes componentsJoinedByString:@" "];
+						mudou = YES;
+					}
+				}
+			}
+
+			[saida addObject:nova];
+		}
+
+		if( mudou )
+			[[saida componentsJoinedByString:@"\n"] writeToFile:touch atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 	}
 }
 

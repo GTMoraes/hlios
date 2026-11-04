@@ -117,7 +117,8 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Trocar de jogo**: Quit no menu do jogo (o app fecha) e abrir o app de novo (no iOS o motor não reinicia sozinho).
 - **Pulo longo**: todo jogo ganha um botão laranja de pulo (à esquerda das miras) que agacha e pula ao mesmo
   tempo (`+pulolongo`). O app grava `hlios.cfg` na pasta do jogo e acrescenta o botão ao `touch.cfg` se ele não
-  estiver lá; se você mudar o botão de lugar no editor, a posição fica.
+  estiver lá. Dá para mover e redimensionar no editor (engrenagem), e a posição fica. Até a 0.1.3 o botão
+  saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
 - Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
