@@ -29,8 +29,17 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
      cada caractere fora de `[A-Za-z0-9_-]` trocado por `_`.
    - Exemplo: `valve/cl_dlls/client_ios_arm64.dylib` vira `Frameworks/valve__cl_dlls__client_ios_arm64.framework`.
    - Jogo sem biblioteca própria usa a do `valve`. É assim que o Blue Shift roda (com `-dll @hl`).
-2. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+2. **`0002-ios-fechar-o-app-ao-sair.patch`**: no iOS, quando o motor termina (Quit ou travamento), o SDL deixa o
+   app aberto numa tela preta. O patch fecha o app; ao abrir de novo, volta a tela inicial.
+3. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
+
+### Mudança no Counter-Strike (`cs16/`)
+
+- **`0001-regamedll-filesystem-ios.patch`**: o servidor do CS (ReGameDLL) abre o `filesystem_stdio` por conta
+  própria, pelo nome solto. No iPhone ele está em `Frameworks/`; sem o patch o servidor fica sem sistema de
+  arquivos e cai ao montar a partida (`signal 11 at 0x0` logo depois de "Executing listen server config file").
+- O YaPB (bot à parte) não compila para iPhone e fica de fora; os bots são os do próprio CS (`bot_add`).
 
 ### Por que o Xcode 26
 
@@ -105,9 +114,13 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   carregamento.
 - **Argumentos extras**: vão no fim da linha de comando. Ex.: `+fs_mount_hd 1` liga os modelos HD (vale a
   partir da abertura seguinte).
-- **Trocar de jogo**: sair pelo menu do jogo e abrir o app de novo (no iOS o motor não reinicia sozinho).
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1`, e `-dll @hl` no
-  Blue Shift. Sem chat de voz, o app não pede o microfone.
+- **Trocar de jogo**: Quit no menu do jogo (o app fecha) e abrir o app de novo (no iOS o motor não reinicia sozinho).
+- **Pulo longo**: todo jogo ganha um botão laranja de pulo (à esquerda das miras) que agacha e pula ao mesmo
+  tempo (`+pulolongo`). O app grava `hlios.cfg` na pasta do jogo e acrescenta o botão ao `touch.cfg` se ele não
+  estiver lá; se você mudar o botão de lugar no editor, a posição fica.
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +exec hlios.cfg`, e
+  `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
+- O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 
 ### Quando algo der errado
 

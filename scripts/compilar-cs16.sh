@@ -13,6 +13,10 @@ CS="$LIBS_CS/cstrike"
 rm -rf "$LIBS_CS"
 
 baixar_repo https://github.com/Velaron/cs16-client "$CS16_COMMIT" "$TRAB/cs16"
+
+# o servidor (ReGameDLL) abre o filesystem_stdio por conta própria, pelo nome solto; no iPhone ele está em
+# Frameworks/ e sem isso o servidor fica sem sistema de arquivos e cai ao montar a partida
+git -C "$TRAB/cs16/3rdparty/ReGameDLL_CS" apply --verbose "$RAIZ/cs16/0001-regamedll-filesystem-ios.patch"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
 PLAT="$(xcrun --sdk iphoneos --show-sdk-platform-path)"
 B="$TRAB/cs16/build"
@@ -21,7 +25,8 @@ B="$TRAB/cs16/build"
 cmake -S "$TRAB/cs16" -B "$B" \
 	-DCMAKE_OSX_SYSROOT="$SDK" -DCMAKE_DEVELOPER_ROOT="$PLAT/Developer" \
 	-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
-	-DMAC=0 -DDEBUG=1 -DXASH_COMPAT=1 -DMAINUI_USE_STB=1 -DCMAKE_BUILD_TYPE=Debug
+	-DMAC=0 -DDEBUG=1 -DXASH_COMPAT=1 -DMAINUI_USE_STB=1 -DCMAKE_BUILD_TYPE=Debug \
+	-DCMAKE_C_FLAGS="-DXASH_IOS_FRAMEWORKS=1" -DCMAKE_CXX_FLAGS="-DXASH_IOS_FRAMEWORKS=1"
 cmake --build "$B" --config Debug --parallel "$NCPU" -- -k || echo "aviso: parte da build falhou (o YaPB, esperado); confiro as bibliotecas abaixo"
 
 echo "== bibliotecas geradas:"

@@ -170,6 +170,38 @@ static void HL_CriarLeiaMe( void )
 		[texto writeToFile:caminho atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 }
 
+// pulo longo (agachar + pular) num botão de toque só, em todos os jogos
+static void HL_PrepararPuloLongo( const char *pasta )
+{
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
+	NSString *touch = [dir stringByAppendingPathComponent:@"touch.cfg"];
+	NSString *botao = @"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 2 1 0\n";
+	NSString *cfg = [NSString stringWithFormat:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
+		@"alias +pulolongo \"+duck;+jump\"\n"
+		@"alias -pulolongo \"-jump;-duck\"\n%@", botao];
+	NSString *atual;
+
+	// hlios.cfg roda na abertura (+exec): cria o comando e, na primeira vez, o botão
+	[cfg writeToFile:[dir stringByAppendingPathComponent:@"hlios.cfg"] atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+
+	// o motor carrega o touch.cfg por cima no começo da partida: o botão precisa estar nele também
+	// (só acrescenta se não estiver, para não desfazer uma posição que você mudou no editor)
+	if( ![fm fileExistsAtPath:touch] )
+		return;
+
+	atual = [NSString stringWithContentsOfFile:touch encoding:NSUTF8StringEncoding error:NULL];
+	if( atual == nil )
+		atual = [NSString stringWithContentsOfFile:touch encoding:NSISOLatin1StringEncoding error:NULL];
+
+	if( atual != nil && [atual rangeOfString:@"pulolongo"].location == NSNotFound )
+	{
+		NSString *novo = [atual hasSuffix:@"\n"] ? [atual stringByAppendingString:botao]
+			: [NSString stringWithFormat:@"%@\n%@", atual, botao];
+		[novo writeToFile:touch atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+	}
+}
+
 static void HL_Juntar( NSMutableArray *lista, NSString *texto )
 {
 	NSArray *partes;
@@ -212,6 +244,11 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"0"];
 	[a addObject:@"+gyro_enable"];
 	[a addObject:[p boolForKey:@"hl.giroscopio"] ? @"1" : @"0"];
+
+	// pulo longo (veja HL_PrepararPuloLongo)
+	HL_PrepararPuloLongo( jogo->pasta );
+	[a addObject:@"+exec"];
+	[a addObject:@"hlios.cfg"];
 
 	HL_Juntar( a, [p stringForKey:@"hl.extras"] );
 

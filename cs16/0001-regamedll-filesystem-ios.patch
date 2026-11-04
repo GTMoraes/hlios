@@ -1,0 +1,28 @@
+diff --git a/regamedll/public/FileSystem.h b/regamedll/public/FileSystem.h
+index cf033ec..e13f52f 100644
+--- a/regamedll/public/FileSystem.h
++++ b/regamedll/public/FileSystem.h
+@@ -40,6 +40,10 @@
+ #elif defined(__ANDROID__)
+     #define STDIO_FILESYSTEM_LIB "libfilesystem_stdio.so"
+     #define STEAM_FILESYSTEM_LIB "libfilesystem_steam.so"
++#elif defined(__APPLE__) && defined(XASH_IOS_FRAMEWORKS)
++	// hlios: on iOS the engine libraries are frameworks inside the app (the engine already loaded it)
++	#define STDIO_FILESYSTEM_LIB "@executable_path/Frameworks/filesystem_stdio.framework/filesystem_stdio"
++	#define STEAM_FILESYSTEM_LIB "filesystem_steam.dylib"
+ #elif defined(__APPLE__)
+ 	#define STDIO_FILESYSTEM_LIB "filesystem_stdio.dylib"
+ 	#define STEAM_FILESYSTEM_LIB "filesystem_steam.dylib"
+diff --git a/regamedll/public/interface.cpp b/regamedll/public/interface.cpp
+index 232fa5b..ca80eeb 100644
+--- a/regamedll/public/interface.cpp
++++ b/regamedll/public/interface.cpp
+@@ -132,7 +132,7 @@ CSysModule *Sys_LoadModule(const char *pModuleName)
+ 	HMODULE hDLL  = nullptr;
+ 	char szAbsoluteModuleName[1024];
+ #ifndef __ANDROID__
+-	if (pModuleName[0] != '/')
++	if (pModuleName[0] != '/' && pModuleName[0] != '@') // hlios: @executable_path/... goes to dlopen as is
+ 	{
+ 		char szCwd[1024];
+ 		getcwd(szCwd, sizeof(szCwd));
