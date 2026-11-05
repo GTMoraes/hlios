@@ -32,10 +32,12 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 2. **`0002-ios-fechar-o-app-ao-sair.patch`**: no iOS, quando o motor termina (Quit ou travamento), o SDL deixa o
    app aberto numa tela preta. O patch fecha o app; ao abrir de novo, volta a tela inicial.
 3. **`0003-ios-toque-no-olhar-atira.patch`**: cria a cvar `touch_look_fire`. Ligada, a área de olhar (lado
-   direito) também atira: toque rápido sem arrastar (menos de 0,25 s) dá um disparo da primária, e toque duplo
-   e segurar (segundo toque até 0,3 s depois do primeiro) atira sem parar enquanto o dedo fica na tela,
-   mirando ao arrastar. Toque que cai num botão (pulo, agachar etc.) não conta como tiro. O disparo do toque
-   rápido sai quando o dedo solta. Vale para todos os jogos.
+   direito) também atira: um toque rápido com o dedo quase parado dá um disparo da primária, e toque duplo e
+   segurar (segundo toque até 0,3 s depois do primeiro) atira sem parar enquanto o dedo fica na tela, mirando
+   ao arrastar. O que conta como toque fica em `touch_look_fire_time` (tempo máximo, padrão 0,18 s) e
+   `touch_look_fire_move` (quanto o dedo pode andar, em fração da tela, padrão 0,005). Toque que cai num botão
+   (pulo, agachar etc.) não conta como tiro. O disparo do toque rápido sai quando o dedo solta. Vale para
+   todos os jogos.
 4. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
@@ -60,9 +62,9 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   servidor avisa pela mensagem `HlGuarda`, e o cliente não prevê tiro com a arma guardada. Sacar usa a
   animação de sacar de cada arma.
 - **`0005-guardar-descida.patch`**: a pistola deixa de tocar a animação de guardar (a dos modelos dela é ruim) e
-  só desce. As armas que só descem (pistola, MP5, hivehand, snark) vão 40 unidades para baixo em 0,4 s, rápido
-  no meio, e só somem fora da tela; as que têm animação de guardar continuam como na 0004. Depois de carregar
-  um save com a arma guardada, ela já aparece escondida.
+  só desce. As armas que só descem (pistola, MP5, hivehand, snark) caem 100 unidades em 0,3 s, acelerando, e
+  só somem fora da tela; as que têm animação de guardar continuam como na 0004. Depois de carregar um save com
+  a arma guardada, ela já aparece escondida.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)
@@ -140,7 +142,8 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Jogos**: só aparecem os que a build trouxe. Os que ainda não foram copiados ficam apagados, com o nome
   da pasta que falta. A lista se atualiza ao voltar do app Arquivos.
 - **Mira pelo giroscópio**: `gyro_enable`.
-- **Toque no olhar atira**: `touch_look_fire` (patch 0003). Ligado por padrão.
+- **Toque no olhar atira**: Desligado, Rigoroso (padrão: até 0,18 s e 0,5% da tela) ou Solto (a regra até a
+  0.1.10: até 0,25 s e 2% da tela). Vira `touch_look_fire`, `touch_look_fire_time` e `touch_look_fire_move`.
 - **Som no modo silencioso**: o som toca mesmo com o iPhone no silencioso.
 - **Log detalhado (diagnóstico)**: `-dev 2`. Mais informação no `engine.log` e mensagens na tela no
   carregamento.
@@ -159,7 +162,7 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
 - **Guardar a arma**: no HL, no OF e no BS o app acrescenta também um botão azul no alto (`"guardar"`,
   `impulse 200`), no lugar do spray (que só aparece no multiplayer). Também dá para mover no editor.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +sv_aim_assist 0-3 +exec hlios.cfg`, e
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 

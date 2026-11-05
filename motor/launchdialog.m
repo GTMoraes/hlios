@@ -80,9 +80,18 @@ static NSUserDefaults *HL_Prefs( void )
 		@"hl.hd": @YES,
 		@"hl.addon": @YES,
 		@"hl.mira": @2,
+		@"hl.toque": @1,
 		@"hl.extras": @"",
 		@"hl.jogo": @"valve"
 	}];
+
+	// até a 0.1.10 o "toque no olhar atira" era um interruptor: se estava desligado, continua desligado
+	if( ![p boolForKey:@"hl.migrou.toque"] )
+	{
+		if( ![p boolForKey:@"hl.olharatira"] )
+			[p setInteger:0 forKey:@"hl.toque"];
+		[p setBool:YES forKey:@"hl.migrou.toque"];
+	}
 
 	return p;
 }
@@ -348,9 +357,18 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"+gyro_enable"];
 	[a addObject:[p boolForKey:@"hl.giroscopio"] ? @"1" : @"0"];
 
-	// toque rápido na área de olhar atira; toque duplo e segurar atira sem parar (patch 0003 do motor)
-	[a addObject:@"+touch_look_fire"];
-	[a addObject:[p boolForKey:@"hl.olharatira"] ? @"1" : @"0"];
+	// toque rápido na área de olhar atira; toque duplo e segurar atira sem parar (patch 0003 do motor).
+	// 1 rigoroso: o dedo quase parado e rápido; 2 solto: a regra das versões até a 0.1.10
+	{
+		NSInteger toque = [p integerForKey:@"hl.toque"];
+
+		[a addObject:@"+touch_look_fire"];
+		[a addObject:( toque > 0 ) ? @"1" : @"0"];
+		[a addObject:@"+touch_look_fire_time"];
+		[a addObject:( toque == 2 ) ? @"0.25" : @"0.18"];
+		[a addObject:@"+touch_look_fire_move"];
+		[a addObject:( toque == 2 ) ? @"0.02" : @"0.005"];
+	}
 
 	// mira assistida (patch jogos/*/0001-mira-assistida.patch): só no HL, no OF e no BS
 	if( !strcmp( jogo->pasta, "valve" ) || !strcmp( jogo->pasta, "gearbox" ) || !strcmp( jogo->pasta, "bshift" ))
@@ -401,7 +419,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 {
 	UIStackView *listaJogos;
 	UISwitch *chaveGiro;
-	UISwitch *chaveTiro;
+	UISegmentedControl *escolhaToque;
 	UISwitch *chaveSom;
 	UISwitch *chaveDiag;
 	UISwitch *chaveHD;
@@ -472,7 +490,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	NSString *versao = [NSString stringWithFormat:@"versão %@ (build %@)",
 		[info objectForKey:@"CFBundleShortVersionString"], [info objectForKey:@"CFBundleVersion"]];
 	UIStackView *esquerda, *direita, *colunas;
-	UILabel *titulo, *subtitulo, *escolha, *ajuda, *rotuloMira;
+	UILabel *titulo, *subtitulo, *escolha, *ajuda, *rotuloMira, *rotuloToque;
 	UIScrollView *rolagem;
 	UILayoutGuide *area;
 
@@ -493,7 +511,12 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	titulo = [self rotulo:@"Half-Life" tamanho:30 peso:UIFontWeightHeavy cor:HL_Laranja()];
 	subtitulo = [self rotulo:versao tamanho:12 peso:UIFontWeightRegular cor:[UIColor grayColor]];
 	chaveGiro = [self chave:@"hl.giroscopio"];
-	chaveTiro = [self chave:@"hl.olharatira"];
+	escolhaToque = [[UISegmentedControl alloc] initWithItems:@[ @"Desligado", @"Rigoroso", @"Solto" ]];
+	escolhaToque.selectedSegmentIndex = (NSInteger)[HL_Prefs() integerForKey:@"hl.toque"];
+	escolhaToque.selectedSegmentTintColor = HL_Laranja();
+	[escolhaToque addTarget:self action:@selector(mudouToque:) forControlEvents:UIControlEventValueChanged];
+	rotuloToque = [self rotulo:@"Toque no olhar atira" tamanho:15 peso:UIFontWeightRegular
+		cor:[UIColor whiteColor]];
 	chaveSom = [self chave:@"hl.som"];
 	chaveDiag = [self chave:@"hl.diagnostico"];
 	chaveHD = [self chave:@"hl.hd"];
@@ -521,11 +544,11 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	direita = [[UIStackView alloc] initWithArrangedSubviews:@[
 		titulo, subtitulo,
 		[self linha:@"Mira pelo giroscópio" chave:chaveGiro],
-		[self linha:@"Toque no olhar atira" chave:chaveTiro],
 		[self linha:@"Som no modo silencioso" chave:chaveSom],
 		[self linha:@"Log detalhado (diagnóstico)" chave:chaveDiag],
 		[self linha:@"Modelos HD" chave:chaveHD],
 		[self linha:@"Conteúdo extra (pastas _addon)" chave:chaveAddon],
+		rotuloToque, escolhaToque,
 		rotuloMira, escolhaMira,
 		botaoExtras, ajuda
 	]];
@@ -533,6 +556,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	direita.spacing = 8;
 	direita.translatesAutoresizingMaskIntoConstraints = NO;
 	[direita setCustomSpacing:12 afterView:subtitulo];
+	[direita setCustomSpacing:6 afterView:rotuloToque];
+	[direita setCustomSpacing:12 afterView:escolhaToque];
 	[direita setCustomSpacing:6 afterView:rotuloMira];
 	[direita setCustomSpacing:12 afterView:escolhaMira];
 
@@ -634,8 +659,6 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 
 	if( s == chaveGiro )
 		[p setBool:s.on forKey:@"hl.giroscopio"];
-	else if( s == chaveTiro )
-		[p setBool:s.on forKey:@"hl.olharatira"];
 	else if( s == chaveSom )
 		[p setBool:s.on forKey:@"hl.som"];
 	else if( s == chaveDiag )
@@ -644,6 +667,11 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[p setBool:s.on forKey:@"hl.hd"];
 	else if( s == chaveAddon )
 		[p setBool:s.on forKey:@"hl.addon"];
+}
+
+- (void)mudouToque:(UISegmentedControl *)c
+{
+	[HL_Prefs() setInteger:c.selectedSegmentIndex forKey:@"hl.toque"];
 }
 
 - (void)mudouMira:(UISegmentedControl *)c

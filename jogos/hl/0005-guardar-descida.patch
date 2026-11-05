@@ -1,5 +1,5 @@
 diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
-index fd4e54e..3cb65a8 100644
+index fd4e54e..dd5afd5 100644
 --- a/cl_dll/view.cpp
 +++ b/cl_dll/view.cpp
 @@ -37,9 +37,11 @@ static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
@@ -15,22 +15,21 @@ index fd4e54e..3cb65a8 100644
  
  	return 1;
  }
-@@ -792,15 +794,20 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+@@ -792,7 +794,12 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
  		vec3_t vFrente, vDireita, vCima;
  		float s;
  
 -		g_flHlGuarda += pparams->frametime / 0.45f;
 +		// 1: a arma tem animação de guardar, então desce pouco e devagar no começo;
-+		// 2 e 3: a arma só desce, então vai rápido e longe o bastante para sair da tela antes de sumir
++		// 2 e 3: a arma só desce, acelerando como se caísse, longe o bastante para sair da tela antes de sumir
 +		const int bAnimada = ( g_iHlGuarda == 1 );
-+		const float flDistancia = bAnimada ? 16.0f : 40.0f;
++		const float flDistancia = bAnimada ? 16.0f : 100.0f;
 +
-+		g_flHlGuarda += pparams->frametime / ( bAnimada ? 0.45f : 0.4f );
++		g_flHlGuarda += pparams->frametime / ( bAnimada ? 0.45f : 0.3f );
  		if( g_flHlGuarda > 1.0f )
  			g_flHlGuarda = 1.0f;
  
--		s = g_flHlGuarda * g_flHlGuarda;
-+		s = bAnimada ? g_flHlGuarda * g_flHlGuarda : g_flHlGuarda * g_flHlGuarda * ( 3.0f - 2.0f * g_flHlGuarda );
+@@ -800,7 +807,7 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
  		AngleVectors( view->angles, vFrente, vDireita, vCima );
  
  		for( i = 0; i < 3; i++ )
