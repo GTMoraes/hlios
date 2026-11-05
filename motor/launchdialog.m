@@ -772,7 +772,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 }
 - (void)recarregar;
 - (void)lerFovDoJogo;
-- (void)fazerCopiaBotoes;
+- (NSString *)copiarBotoesHL;
+- (NSString *)copiarArmasHL;
 @end
 
 @implementation HLTela
@@ -894,8 +895,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	{
 		UIButtonConfiguration *c = HL_EstiloBotao( NO );
 
-		c.title = @"Usar os botões do Half-Life no OF e no BS";
-		c.subtitle = @"Os de agora ficam guardados como touch-antigo.cfg";
+		c.title = @"Copiar do Half-Life para o OF e o BS";
+		c.subtitle = @"Os botões, os ajustes das armas ou os dois";
 		c.titleAlignment = UIButtonConfigurationTitleAlignmentLeading;
 		c.contentInsets = NSDirectionalEdgeInsetsMake( 8, 14, 8, 14 );
 		c.cornerStyle = UIButtonConfigurationCornerStyleLarge;
@@ -1186,23 +1187,57 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 
 - (void)copiarBotoes:(UIButton *)b
 {
-	UIAlertController *janela = [UIAlertController alertControllerWithTitle:@"Usar os botões do Half-Life?"
-		message:@"Os botões do Opposing Force e do Blue Shift ficam iguais aos do Half-Life (o OF ganha o 6 e o 7 "
-		@"ao lado do 5). Os de agora ficam guardados como touch-antigo.cfg na pasta de cada jogo."
+	UIAlertController *janela = [UIAlertController alertControllerWithTitle:@"Copiar do Half-Life para o OF e o BS"
+		message:@"Botões: o OF e o BS ficam com os botões do HL (o OF ganha o 6 e o 7 ao lado do 5).\n"
+		@"Ajustes das armas: as armas que você ajustou no HL (FOV e posição) ficam iguais no OF e no BS.\n"
+		@"O que eles tinham antes fica guardado na pasta de cada jogo (touch-antigo.cfg e fov_armas-antigo.txt)."
 		preferredStyle:UIAlertControllerStyleAlert];
 
 	(void)b;
 
-	[janela addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
-	[janela addAction:[UIAlertAction actionWithTitle:@"Copiar" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
+	[janela addAction:[UIAlertAction actionWithTitle:@"Botões" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
 		(void)acao;
-		[self fazerCopiaBotoes];
+		[self avisar:@"Botões" texto:[self copiarBotoesHL]];
 	}]];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Ajustes das armas" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
+		(void)acao;
+		[self avisar:@"Ajustes das armas" texto:[self copiarArmasHL]];
+	}]];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Os dois" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
+		NSString *botoes = [self copiarBotoesHL];
+
+		(void)acao;
+		[self avisar:@"Botões e armas" texto:[NSString stringWithFormat:@"%@\n%@", botoes, [self copiarArmasHL]]];
+	}]];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
 
 	[self presentViewController:janela animated:YES completion:nil];
 }
 
-- (void)fazerCopiaBotoes
+// guarda um arquivo sem apagar um guardado antes: nome-antigo.ext, nome-antigo-2.ext...
+static BOOL HL_GuardarAntigo( NSString *arquivo )
+{
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *base = [[arquivo stringByDeletingPathExtension] stringByAppendingString:@"-antigo"];
+	NSString *ext = [arquivo pathExtension];
+	NSString *antigo = [base stringByAppendingPathExtension:ext];
+	int n = 2;
+
+	if( ![fm fileExistsAtPath:arquivo] )
+		return YES;
+
+	while( [fm fileExistsAtPath:antigo] )
+		antigo = [[NSString stringWithFormat:@"%@-%d", base, n++] stringByAppendingPathExtension:ext];
+
+	return [fm moveItemAtPath:arquivo toPath:antigo error:NULL];
+}
+
+static NSString *HL_NomeDoJogo( const char *pasta )
+{
+	return !strcmp( pasta, "gearbox" ) ? @"Opposing Force" : @"Blue Shift";
+}
+
+- (NSString *)copiarBotoesHL
 {
 	static const char *destinos[] = { "gearbox", "bshift" };
 	NSFileManager *fm = [NSFileManager defaultManager];
@@ -1211,41 +1246,161 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	int i;
 
 	if( ![fm fileExistsAtPath:origem] )
-	{
-		[self avisar:@"Nada para copiar" texto:@"O Half-Life ainda não tem touch.cfg. Abra o HL uma vez e saia pelo Quit."];
-		return;
-	}
+		return @"O Half-Life ainda não tem touch.cfg. Abra o HL uma vez e saia pelo Quit.";
 
 	for( i = 0; i < 2; i++ )
 	{
-		NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( destinos[i] )];
-		NSString *destino = [dir stringByAppendingPathComponent:@"touch.cfg"];
+		NSString *destino = [[HL_Docs() stringByAppendingPathComponent:HL_Texto( destinos[i] )]
+			stringByAppendingPathComponent:@"touch.cfg"];
+
+		if( !HL_TemPasta( destinos[i] ) || !HL_GuardarAntigo( destino ))
+			continue;
+
+		if( [fm copyItemAtPath:origem toPath:destino error:NULL] )
+			[feitos addObject:HL_NomeDoJogo( destinos[i] )];
+	}
+
+	if( [feitos count] == 0 )
+		return @"Não copiei os botões: não achei as pastas gearbox e bshift, ou não deu para gravar nelas.";
+
+	return [NSString stringWithFormat:@"Os botões do Half-Life agora valem no %@.", [feitos componentsJoinedByString:@" e no "]];
+}
+
+// um arquivo dentro de uma pasta, sem ligar para maiúsculas (o motor também não liga); nil se não tem
+static NSString *HL_AcharArquivo( NSString *raiz, NSString *relativo )
+{
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *atual = raiz;
+
+	for( NSString *parte in [relativo componentsSeparatedByString:@"/"] )
+	{
+		NSString *achado = nil;
+
+		if( [parte length] == 0 )
+			continue;
+
+		for( NSString *item in [fm contentsOfDirectoryAtPath:atual error:NULL] )
+		{
+			if( [[item lowercaseString] isEqualToString:[parte lowercaseString]] )
+			{
+				achado = item;
+				break;
+			}
+		}
+
+		if( achado == nil )
+			return nil;
+
+		atual = [atual stringByAppendingPathComponent:achado];
+	}
+
+	return atual;
+}
+
+// copia o fov_armas.txt do HL para o OF e o BS. As mãos mudam de jogo para jogo (e o tamanho do arquivo do
+// modelo junto), então cada arma vai como "nome:*", que o motor usa para o modelo com esse nome (patch 0004).
+// Se o HL tem mais de um ajuste para o mesmo nome (HD e _addon, por exemplo), vai o do modelo que o HL usa hoje
+- (NSString *)copiarArmasHL
+{
+	static const char *destinos[] = { "gearbox", "bshift" };
+	NSUserDefaults *p = HL_Prefs();
+	NSString *origem = [[HL_Docs() stringByAppendingPathComponent:@"valve"] stringByAppendingPathComponent:@"fov_armas.txt"];
+	NSString *texto = [NSString stringWithContentsOfFile:origem encoding:NSUTF8StringEncoding error:NULL];
+	NSMutableDictionary *escolhidos = [NSMutableDictionary dictionary]; // nome em minúsculas -> linha "nome:* valores"
+	NSMutableArray *raizes = [NSMutableArray array];
+	NSMutableArray *feitos = [NSMutableArray array];
+	int i;
+
+	if( [p boolForKey:@"hl.addon"] )
+		[raizes addObject:@"valve_addon"];
+	if( [p boolForKey:@"hl.hd"] )
+		[raizes addObject:@"valve_hd"];
+	[raizes addObject:@"valve"];
+
+	for( NSString *l in [texto componentsSeparatedByString:@"\n"] )
+	{
+		NSString *limpa = [l stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		NSRange espaco = [limpa rangeOfString:@" "];
+		NSString *chave, *valores, *nome, *tamanho;
+		NSRange doisPontos;
+		BOOL ehOAtual = NO;
+
+		if( [limpa length] == 0 || [limpa hasPrefix:@"//"] || espaco.location == NSNotFound )
+			continue;
+
+		chave = [limpa substringToIndex:espaco.location];
+		valores = [limpa substringFromIndex:espaco.location + 1];
+		doisPontos = [chave rangeOfString:@":" options:NSBackwardsSearch];
+
+		if( doisPontos.location == NSNotFound )
+			continue;
+
+		nome = [chave substringToIndex:doisPontos.location];
+		tamanho = [chave substringFromIndex:doisPontos.location + 1];
+
+		// é o modelo que o HL acha primeiro, com as pastas ligadas hoje?
+		for( NSString *r in raizes )
+		{
+			NSString *arq = HL_AcharArquivo( [HL_Docs() stringByAppendingPathComponent:r], nome );
+
+			if( arq != nil )
+			{
+				unsigned long long t = [[[NSFileManager defaultManager] attributesOfItemAtPath:arq error:NULL] fileSize];
+
+				ehOAtual = ( [tamanho longLongValue] == (long long)t );
+				break;
+			}
+		}
+
+		if( ehOAtual || [escolhidos objectForKey:[nome lowercaseString]] == nil )
+			[escolhidos setObject:[NSString stringWithFormat:@"%@:* %@", nome, valores] forKey:[nome lowercaseString]];
+	}
+
+	if( [escolhidos count] == 0 )
+		return @"O Half-Life ainda não tem nenhuma arma ajustada.";
+
+	for( i = 0; i < 2; i++ )
+	{
+		NSString *destino = [[HL_Docs() stringByAppendingPathComponent:HL_Texto( destinos[i] )]
+			stringByAppendingPathComponent:@"fov_armas.txt"];
+		NSString *atual = [NSString stringWithContentsOfFile:destino encoding:NSUTF8StringEncoding error:NULL];
+		NSMutableString *novo = [NSMutableString stringWithString:
+			@"// hlios: cada arma (modelo:tamanho, ou modelo:* para os copiados do HL), com fov_arma, arma_frente, arma_lado e arma_altura\n"];
 
 		if( !HL_TemPasta( destinos[i] ))
 			continue;
 
-		// guarda o de agora sem apagar um guardado antes: touch-antigo.cfg, touch-antigo-2.cfg...
-		if( [fm fileExistsAtPath:destino] )
+		// fica o que o jogo tinha para as outras armas; as copiadas substituem as de mesmo nome
+		for( NSString *l in [atual componentsSeparatedByString:@"\n"] )
 		{
-			NSString *antigo = [dir stringByAppendingPathComponent:@"touch-antigo.cfg"];
-			int n = 2;
+			NSString *limpa = [l stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+			NSRange doisPontos = [limpa rangeOfString:@":"];
 
-			while( [fm fileExistsAtPath:antigo] )
-				antigo = [dir stringByAppendingPathComponent:[NSString stringWithFormat:@"touch-antigo-%d.cfg", n++]];
-
-			if( ![fm moveItemAtPath:destino toPath:antigo error:NULL] )
+			if( [limpa length] == 0 || [limpa hasPrefix:@"//"] )
 				continue;
+
+			if( doisPontos.location != NSNotFound &&
+				[escolhidos objectForKey:[[limpa substringToIndex:doisPontos.location] lowercaseString]] != nil )
+				continue;
+
+			[novo appendFormat:@"%@\n", limpa];
 		}
 
-		if( [fm copyItemAtPath:origem toPath:destino error:NULL] )
-			[feitos addObject:!strcmp( destinos[i], "gearbox" ) ? @"Opposing Force" : @"Blue Shift"];
+		for( NSString *linha in [escolhidos allValues] )
+			[novo appendFormat:@"%@\n", linha];
+
+		if( !HL_GuardarAntigo( destino ))
+			continue;
+
+		if( [novo writeToFile:destino atomically:YES encoding:NSUTF8StringEncoding error:NULL] )
+			[feitos addObject:HL_NomeDoJogo( destinos[i] )];
 	}
 
 	if( [feitos count] == 0 )
-		[self avisar:@"Não copiou" texto:@"Não achei as pastas gearbox e bshift, ou não deu para gravar nelas."];
-	else
-		[self avisar:@"Pronto" texto:[NSString stringWithFormat:@"Os botões do Half-Life agora valem no %@.",
-			[feitos componentsJoinedByString:@" e no "]]];
+		return @"Não copiei os ajustes das armas: não achei as pastas gearbox e bshift, ou não deu para gravar nelas.";
+
+	return [NSString stringWithFormat:@"%d arma(s) do Half-Life agora com os mesmos ajustes no %@.",
+		(int)[escolhidos count], [feitos componentsJoinedByString:@" e no "]];
 }
 
 - (void)jogar:(UIButton *)b

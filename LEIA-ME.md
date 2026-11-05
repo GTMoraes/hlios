@@ -50,7 +50,9 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    arma, a cvar passa a mostrar o valor da nova. Do mesmo jeito, `arma_frente`, `arma_lado` e `arma_altura`
    mudam a posição da arma na mão (em unidades do jogo, junto com a câmera; só o desenho, a mira e os tiros
    continuam iguais), e o comando `ajustar_arma <frente|lado|altura|fov> <passo>` (ou `ajustar_arma zerar`)
-   soma um passo e mostra os valores no meio da tela.
+   soma um passo e mostra os valores no meio da tela. Uma linha `modelo:*` (as que o app copia de outro jogo)
+   vale para o modelo com esse nome quando não tem a linha do modelo exato; zerar uma arma assim grava a linha
+   exata zerada, para a copiada não voltar.
 5. **`0005-ios-fov-no-menu-do-jogo.patch`** (no `3rdparty/mainui`, o menu do jogo): três barras em
    Configuration › Video › Video options, à direita da imagem de teste: Field of view (`default_fov`), Weapon
    FOV (`r_viewmodel_fov`) e Weapon in hand FOV (`fov_arma`, só com um jogo aberto). Mudam na hora e mostram o
@@ -186,9 +188,12 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   app decidiu fica no `engine.log`, numa linha que começa com `hlios:`.
 - **Botões padrão (HL, OF e BS)**: o layout da 0.1.15, com o 6 e o 7 do OF logo depois do 5 e os
   botões de ajustar a arma. Vale num jogo sem `touch.cfg` e no Reset do menu Touch.
-- **Usar os botões do Half-Life no OF e no BS**: botão na tela inicial que pergunta antes e copia o
-  `valve/touch.cfg` para `gearbox` e `bshift`. O de antes fica como `touch-antigo.cfg` (ou `touch-antigo-2.cfg`
-  e assim por diante, sem apagar nenhum).
+- **Copiar do Half-Life para o OF e o BS**: botão na tela inicial que pergunta o que copiar (Botões, Ajustes
+  das armas ou Os dois). Botões: copia o `valve/touch.cfg` para `gearbox` e `bshift`. Ajustes das armas: copia
+  o `valve/fov_armas.txt` como linhas `modelo:*` (as mãos mudam de jogo para jogo, e o arquivo do modelo
+  junto), substituindo as armas de mesmo nome e mantendo as outras; se o HL tem dois ajustes para o mesmo nome,
+  vai o do modelo que o HL usa hoje (pastas `_addon` e `_hd` ligadas ou não). O de antes fica como
+  `touch-antigo.cfg` e `fov_armas-antigo.txt` (ou `-antigo-2` e assim por diante, sem apagar nenhum).
 - **Ajustar a arma (HL, OF e BS)**: o botão laranja AJUSTAR ARMA mostra e esconde um bloco de botões no meio da
   tela: PERTO, LONGE, SUBIR, DESCER, ESQ., DIR. (0,5 unidade por toque), FOV - e FOV + (2 por toque) e ZERAR.
   Tudo vale para a arma na mão e fica salvo por modelo. O botão AJUSTAR ARMA dá para esconder no editor.
