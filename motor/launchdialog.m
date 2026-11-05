@@ -74,6 +74,7 @@ static NSUserDefaults *HL_Prefs( void )
 
 	[p registerDefaults:@{
 		@"hl.giroscopio": @NO,
+		@"hl.olharatira": @YES,
 		@"hl.som": @YES,
 		@"hl.diagnostico": @YES,
 		@"hl.extras": @"",
@@ -292,6 +293,10 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"+gyro_enable"];
 	[a addObject:[p boolForKey:@"hl.giroscopio"] ? @"1" : @"0"];
 
+	// toque rápido na área de olhar atira; toque duplo e segurar atira sem parar (patch 0003 do motor)
+	[a addObject:@"+touch_look_fire"];
+	[a addObject:[p boolForKey:@"hl.olharatira"] ? @"1" : @"0"];
+
 	// pulo longo (veja HL_PrepararPuloLongo)
 	HL_PrepararPuloLongo( jogo->pasta );
 	[a addObject:@"+exec"];
@@ -331,6 +336,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 {
 	UIStackView *listaJogos;
 	UISwitch *chaveGiro;
+	UISwitch *chaveTiro;
 	UISwitch *chaveSom;
 	UISwitch *chaveDiag;
 	UITextField *campoExtras;
@@ -418,6 +424,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	titulo = [self rotulo:@"Half-Life" tamanho:30 peso:UIFontWeightHeavy cor:HL_Laranja()];
 	subtitulo = [self rotulo:versao tamanho:12 peso:UIFontWeightRegular cor:[UIColor grayColor]];
 	chaveGiro = [self chave:@"hl.giroscopio"];
+	chaveTiro = [self chave:@"hl.olharatira"];
 	chaveSom = [self chave:@"hl.som"];
 	chaveDiag = [self chave:@"hl.diagnostico"];
 
@@ -439,13 +446,14 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	direita = [[UIStackView alloc] initWithArrangedSubviews:@[
 		titulo, subtitulo,
 		[self linha:@"Mira pelo giroscópio" chave:chaveGiro],
+		[self linha:@"Toque no olhar atira" chave:chaveTiro],
 		[self linha:@"Som no modo silencioso" chave:chaveSom],
 		[self linha:@"Log detalhado (diagnóstico)" chave:chaveDiag],
 		campoExtras, ajuda
 	]];
 	direita.axis = UILayoutConstraintAxisVertical;
-	direita.spacing = 10;
-	[direita setCustomSpacing:16 afterView:subtitulo];
+	direita.spacing = 8;
+	[direita setCustomSpacing:12 afterView:subtitulo];
 
 	colunas = [[UIStackView alloc] initWithArrangedSubviews:@[ esquerda, direita ]];
 	colunas.axis = UILayoutConstraintAxisHorizontal;
@@ -531,6 +539,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 
 	if( s == chaveGiro )
 		[p setBool:s.on forKey:@"hl.giroscopio"];
+	else if( s == chaveTiro )
+		[p setBool:s.on forKey:@"hl.olharatira"];
 	else if( s == chaveSom )
 		[p setBool:s.on forKey:@"hl.som"];
 	else if( s == chaveDiag )

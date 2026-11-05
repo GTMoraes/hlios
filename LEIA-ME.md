@@ -31,7 +31,12 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    - Jogo sem biblioteca própria usa a do `valve`. É assim que o Blue Shift roda (com `-dll @hl`).
 2. **`0002-ios-fechar-o-app-ao-sair.patch`**: no iOS, quando o motor termina (Quit ou travamento), o SDL deixa o
    app aberto numa tela preta. O patch fecha o app; ao abrir de novo, volta a tela inicial.
-3. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+3. **`0003-ios-toque-no-olhar-atira.patch`**: cria a cvar `touch_look_fire`. Ligada, a área de olhar (lado
+   direito) também atira: toque rápido sem arrastar (menos de 0,25 s) dá um disparo da primária, e toque duplo
+   e segurar (segundo toque até 0,3 s depois do primeiro) atira sem parar enquanto o dedo fica na tela,
+   mirando ao arrastar. Toque que cai num botão (pulo, agachar etc.) não conta como tiro. O disparo do toque
+   rápido sai quando o dedo solta. Vale para todos os jogos.
+4. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
 ### Mudança no Counter-Strike (`cs16/`)
@@ -109,6 +114,7 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Jogos**: só aparecem os que a build trouxe. Os que ainda não foram copiados ficam apagados, com o nome
   da pasta que falta. A lista se atualiza ao voltar do app Arquivos.
 - **Mira pelo giroscópio**: `gyro_enable`.
+- **Toque no olhar atira**: `touch_look_fire` (patch 0003). Ligado por padrão.
 - **Som no modo silencioso**: o som toca mesmo com o iPhone no silencioso.
 - **Log detalhado (diagnóstico)**: `-dev 2`. Mais informação no `engine.log` e mensagens na tela no
   carregamento.
@@ -119,7 +125,7 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   tempo (`+pulolongo`). O app grava `hlios.cfg` na pasta do jogo e acrescenta o botão ao `touch.cfg` se ele não
   estiver lá. Dá para mover e redimensionar no editor (engrenagem), e a posição fica. Até a 0.1.3 o botão
   saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +exec hlios.cfg`, e
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 
