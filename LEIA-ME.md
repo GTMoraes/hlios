@@ -47,7 +47,14 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   Python: 10° no original; MP5 e escopeta: 5°) e pintam a mira de vermelho quando o tiro vai pegar num alvo.
   Valem mesmo com `sv_aim` e `sv_allow_autoaim` desligados (no Xash o `sv_allow_autoaim` vem desligado).
   Só muda a mira: dano, inimigos e munição do Difícil ficam iguais.
-- O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch` depois de baixar cada hlsdk.
+- **`0002-mira-sem-amigos.patch`**: com a `sv_aim_assist` ligada, a mira só puxa para quem está contra o
+  jogador (inclusive um aliado provocado) ou para quem ele detesta e não é aliado dele. Cientistas, guardas,
+  soldados aliados do Opposing Force e caixas quebráveis ficam de fora; um aliado na frente não deixa a mira
+  vermelha.
+- **`0003-guardar-arma.patch`**: `impulse 200` guarda a arma (animação de guardar e o modelo some) ou saca de
+  novo. Guardada, ela não atira, não recarrega, não bate e não lança nada; a lanterna e o "usar" continuam.
+  Escolher qualquer arma também saca. O estado vai junto no save.
+- O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)
 
@@ -141,6 +148,8 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   tempo (`+pulolongo`). O app grava `hlios.cfg` na pasta do jogo e acrescenta o botão ao `touch.cfg` se ele não
   estiver lá. Dá para mover e redimensionar no editor (engrenagem), e a posição fica. Até a 0.1.3 o botão
   saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
+- **Guardar a arma**: no HL, no OF e no BS o app acrescenta também um botão azul no alto (`"guardar"`,
+  `impulse 200`), no lugar do spray (que só aparece no multiplayer). Também dá para mover no editor.
 - Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.

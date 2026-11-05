@@ -1,0 +1,67 @@
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index 0da5be8..678db98 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -4649,6 +4649,19 @@ Vector CBasePlayer::GetAutoaimVector( float flDelta )
+ 	return gpGlobals->v_forward;
+ }
+ 
++// hlios: alvo da mira assistida: quem está contra o jogador (inclusive um aliado provocado), ou quem o
++// jogador detesta e não é aliado dele. Cientistas, guardas e soldados aliados (Opposing Force) ficam de fora.
++BOOL CBasePlayer::AutoaimAlvoValido( CBaseEntity *pEntity )
++{
++	CBaseMonster *pMonster = pEntity->MyMonsterPointer();
++	const int iDele = pMonster ? pMonster->IRelationship( this ) : R_NO;
++
++	if( iDele > R_NO )
++		return TRUE;
++
++	return ( IRelationship( pEntity ) > R_NO && iDele != R_AL );
++}
++
+ Vector CBasePlayer::AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta )
+ {
+ 	edict_t *pEdict = g_engfuncs.pfnPEntityOfEntIndex( 1 );
+@@ -4681,10 +4694,16 @@ Vector CBasePlayer::AutoaimDeflection( Vector &vecSrc, float flDist, float flDel
+ 		// don't look through water
+ 		if( !( ( pev->waterlevel != 3 && tr.pHit->v.waterlevel == 3 ) || ( pev->waterlevel == 3 && tr.pHit->v.waterlevel == 0 ) ) )
+ 		{
+-			if( tr.pHit->v.takedamage == DAMAGE_AIM )
+-				m_fOnTarget = TRUE;
++			// hlios: com a mira assistida, um aliado na frente não conta como alvo (segue procurando um inimigo)
++			CBaseEntity *pHit = CBaseEntity::Instance( tr.pHit );
+ 
+-			return m_vecAutoAim;
++			if( !( sv_aim_assist.value > 0.0f && tr.pHit->v.takedamage == DAMAGE_AIM && pHit && !AutoaimAlvoValido( pHit )))
++			{
++				if( tr.pHit->v.takedamage == DAMAGE_AIM )
++					m_fOnTarget = TRUE;
++
++				return m_vecAutoAim;
++			}
+ 		}
+ 	}
+ 
+@@ -4740,6 +4759,10 @@ Vector CBasePlayer::AutoaimDeflection( Vector &vecSrc, float flDist, float flDel
+ 			continue;
+ 		}
+ 
++		// hlios: com a mira assistida, só inimigos
++		if( sv_aim_assist.value > 0.0f && !AutoaimAlvoValido( pEntity ))
++			continue;
++
+ 		// don't shoot at friends
+ 		if( IRelationship( pEntity ) < 0 )
+ 		{
+diff --git a/dlls/player.h b/dlls/player.h
+index a060279..7351de7 100644
+--- a/dlls/player.h
++++ b/dlls/player.h
+@@ -309,6 +309,7 @@ public:
+ 	void ResetAutoaim( void );
+ 	Vector GetAutoaimVector( float flDelta  );
+ 	Vector AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta  );
++	BOOL AutoaimAlvoValido( CBaseEntity *pEntity ); // hlios: mira assistida só em inimigos
+ 
+ 	void ForceClientDllUpdate( void );  // Forces all client .dll specific data to be resent to client.
+ 

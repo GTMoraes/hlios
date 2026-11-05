@@ -1,0 +1,117 @@
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index 678db98..4e8311b 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -74,6 +74,8 @@ TYPEDESCRIPTION	CBasePlayer::m_playerSaveData[] =
+ {
+ 	DEFINE_FIELD( CBasePlayer, m_flFlashLightTime, FIELD_TIME ),
+ 	DEFINE_FIELD( CBasePlayer, m_iFlashBattery, FIELD_INTEGER ),
++	DEFINE_FIELD( CBasePlayer, m_bArmaGuardada, FIELD_BOOLEAN ),
++	DEFINE_FIELD( CBasePlayer, m_flGuardarTempo, FIELD_TIME ),
+ 
+ 	DEFINE_FIELD( CBasePlayer, m_afButtonLast, FIELD_INTEGER ),
+ 	DEFINE_FIELD( CBasePlayer, m_afButtonPressed, FIELD_INTEGER ),
+@@ -3120,6 +3122,7 @@ ReturnSpot:
+ 
+ void CBasePlayer::Spawn( void )
+ {
++	m_bArmaGuardada = FALSE;
+ 	m_flStartCharge = gpGlobals->time;
+ 	pev->classname = MAKE_STRING( "player" );
+ 	pev->health = 100;
+@@ -3421,7 +3424,12 @@ void CBasePlayer::SelectItem( const char *pstr )
+ 		return;
+ 
+ 	if( pItem == m_pActiveItem )
++	{
++		// hlios: escolher a arma que está guardada saca ela
++		if( m_bArmaGuardada )
++			GuardarOuSacarArma();
+ 		return;
++	}
+ 
+ 	if( !pItem->CanDeploy())
+ 		return;
+@@ -3759,6 +3767,10 @@ void CBasePlayer::ImpulseCommands()
+ 			FlashlightTurnOn();
+ 		}
+ 		break;
++	case 200:
++		// hlios: guardar ou sacar a arma
++		GuardarOuSacarArma();
++		break;
+ 	case 201:
+ 		// paint decal
+ 		if( gpGlobals->time < m_flNextDecalTime )
+@@ -4167,9 +4179,42 @@ void CBasePlayer::ItemPostFrame()
+ 	if( !m_pActiveItem )
+ 		return;
+ 
++	// hlios: arma guardada não atira, não recarrega nem bate; o modelo some depois da animação de guardar
++	if( m_bArmaGuardada )
++	{
++		if( gpGlobals->time >= m_flGuardarTempo )
++		{
++			pev->viewmodel = 0;
++			pev->weaponmodel = 0;
++		}
++		return;
++	}
++
+ 	m_pActiveItem->ItemPostFrame();
+ }
+ 
++// hlios: impulse 200; sacar de novo também acontece ao escolher qualquer arma
++void CBasePlayer::GuardarOuSacarArma( void )
++{
++	if( !m_pActiveItem )
++		return;
++
++	if( m_bArmaGuardada )
++	{
++		m_bArmaGuardada = FALSE;
++		m_pActiveItem->Deploy();
++		return;
++	}
++
++	if( !m_pActiveItem->CanHolster() )
++		return;
++
++	m_pActiveItem->Holster();
++	m_bArmaGuardada = TRUE;
++	m_flGuardarTempo = gpGlobals->time + 0.5f;
++	m_flNextAttack = UTIL_WeaponTimeBase() + 0.5f;
++}
++
+ int CBasePlayer::AmmoInventory( int iAmmoIndex )
+ {
+ 	if( iAmmoIndex == -1 )
+diff --git a/dlls/player.h b/dlls/player.h
+index 7351de7..941a9be 100644
+--- a/dlls/player.h
++++ b/dlls/player.h
+@@ -307,6 +307,11 @@ public:
+ 	int Illumination( void );
+ 
+ 	void ResetAutoaim( void );
++
++	// hlios: guardar e sacar a arma (impulse 200); guardada, ela não atira, não recarrega nem bate
++	BOOL m_bArmaGuardada;
++	float m_flGuardarTempo;
++	void GuardarOuSacarArma( void );
+ 	Vector GetAutoaimVector( float flDelta  );
+ 	Vector AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta  );
+ 	BOOL AutoaimAlvoValido( CBaseEntity *pEntity ); // hlios: mira assistida só em inimigos
+diff --git a/dlls/weapons.cpp b/dlls/weapons.cpp
+index 8c9338c..5b037db 100644
+--- a/dlls/weapons.cpp
++++ b/dlls/weapons.cpp
+@@ -1003,6 +1003,8 @@ BOOL CBasePlayerWeapon::DefaultDeploy( const char *szViewModel, const char *szWe
+ 	if( !CanDeploy() )
+ 		return FALSE;
+ 
++	m_pPlayer->m_bArmaGuardada = FALSE; // hlios: sacar uma arma tira o "guardada"
++
+ 	m_pPlayer->TabulateAmmo();
+ 	m_pPlayer->pev->viewmodel = MAKE_STRING( szViewModel );
+ 	m_pPlayer->pev->weaponmodel = MAKE_STRING( szWeaponModel );

@@ -174,17 +174,28 @@ static void HL_CriarLeiaMe( void )
 		[texto writeToFile:caminho atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 }
 
-// pulo longo (agachar + pular) num botão de toque só, em todos os jogos
+// botões de toque do app: pulo longo (agachar + pular) em todos os jogos e, no HL, no OF e no BS,
+// guardar e sacar a arma (impulse 200, patch jogos/*/0003-guardar-arma.patch)
 static void HL_PrepararPuloLongo( const char *pasta )
 {
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
 	NSString *touch = [dir stringByAppendingPathComponent:@"touch.cfg"];
-	NSString *botao = @"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n";
-	NSString *cfg = [NSString stringWithFormat:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
+	BOOL temGuardar = !strcmp( pasta, "valve" ) || !strcmp( pasta, "gearbox" ) || !strcmp( pasta, "bshift" );
+	NSArray *nomes = temGuardar ? @[ @"pulolongo", @"guardar" ] : @[ @"pulolongo" ];
+	NSArray *botoes = @[
+		@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n",
+		@"touch_addbutton \"guardar\" \"touch_default/show_weapons\" \"impulse 200\" 0.68 0.00 0.76 0.142 120 200 255 200 0 1\n"
+	];
+	NSMutableString *cfg = [NSMutableString stringWithString:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
 		@"alias +pulolongo \"+duck;+jump\"\n"
-		@"alias -pulolongo \"-jump;-duck\"\n%@", botao];
+		@"alias -pulolongo \"-jump;-duck\"\n"];
+	NSMutableString *faltando = [NSMutableString string];
 	NSString *atual;
+	NSUInteger i;
+
+	for( i = 0; i < [nomes count]; i++ )
+		[cfg appendString:[botoes objectAtIndex:i]];
 
 	// hlios.cfg roda na abertura (+exec): cria o comando e, na primeira vez, o botão
 	[cfg writeToFile:[dir stringByAppendingPathComponent:@"hlios.cfg"] atomically:YES encoding:NSUTF8StringEncoding error:NULL];
@@ -201,12 +212,20 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	if( atual == nil )
 		return;
 
-	if( [atual rangeOfString:@"pulolongo"].location == NSNotFound )
+	for( i = 0; i < [nomes count]; i++ )
 	{
-		NSString *novo = [atual hasSuffix:@"\n"] ? [atual stringByAppendingString:botao]
-			: [NSString stringWithFormat:@"%@\n%@", atual, botao];
+		NSString *marca = [NSString stringWithFormat:@"\"%@\"", [nomes objectAtIndex:i]];
+
+		if( [atual rangeOfString:marca].location == NSNotFound )
+			[faltando appendString:[botoes objectAtIndex:i]];
+	}
+
+	if( [faltando length] > 0 )
+	{
+		NSString *novo = [atual hasSuffix:@"\n"] ? [atual stringByAppendingString:faltando]
+			: [NSString stringWithFormat:@"%@\n%@", atual, faltando];
 		[novo writeToFile:touch atomically:YES encoding:NSUTF8StringEncoding error:NULL];
-		return;
+		atual = novo;
 	}
 
 	// versões até a 0.1.3 criavam o botão com a marca "não editável" (flag 2): tira só essa marca,
