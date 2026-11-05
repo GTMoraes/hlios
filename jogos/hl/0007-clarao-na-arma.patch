@@ -1,0 +1,58 @@
+diff --git a/cl_dll/StudioModelRenderer.cpp b/cl_dll/StudioModelRenderer.cpp
+index 53d320a..dafcd6a 100644
+--- a/cl_dll/StudioModelRenderer.cpp
++++ b/cl_dll/StudioModelRenderer.cpp
+@@ -1546,6 +1546,53 @@ void CStudioModelRenderer::StudioCalcAttachments( void )
+ 	{
+ 		VectorTransform( pattachment[i].org, (*m_plighttransform)[pattachment[i].bone], m_pCurrentEntity->attachment[i] );
+ 	}
++
++	// hlios: com o fov próprio da arma na mão (r_viewmodel_fov e fov_arma, do motor), a arma é desenhada com
++	// outra lente, mas o clarão do tiro e os raios saem destes pontos e são desenhados com a lente do mundo.
++	// O motor diz em r_viewmodel_escala quanto a lente da arma aumenta: cada ponto vem para mais perto da
++	// câmera nessa proporção, na mesma linha de visão. Assim ele cai no mesmo lugar da tela e o clarão cresce
++	// junto com a arma. Perto demais da câmera ele seria cortado: aí para a 6 unidades e se afasta do centro
++	// da vista o que falta, para continuar no lugar certo
++	if( m_pCurrentEntity == gEngfuncs.GetViewModel() )
++	{
++		static cvar_t *escala = NULL;
++
++		if( !escala )
++			escala = gEngfuncs.pfnGetCvarPointer( "r_viewmodel_escala" );
++
++		if( escala && escala->value > 0.0f && fabs( escala->value - 1.0f ) > 0.0001f )
++		{
++			for( i = 0; i < m_pStudioHeader->numattachments; i++ )
++			{
++				vec3_t v;
++				float f, d, c, lado;
++				int j;
++
++				VectorSubtract( m_pCurrentEntity->attachment[i], m_vRenderOrigin, v );
++				f = DotProduct( v, m_vNormal );
++
++				if( f <= 1.0f )
++					continue;
++
++				d = DotProduct( v, m_vRight );
++				c = DotProduct( v, m_vUp );
++				lado = 1.0f;
++
++				f /= escala->value;
++				if( f < 6.0f )
++				{
++					lado = 6.0f / f;
++					f = 6.0f;
++				}
++
++				d *= lado;
++				c *= lado;
++
++				for( j = 0; j < 3; j++ )
++					m_pCurrentEntity->attachment[i][j] = m_vRenderOrigin[j] + m_vNormal[j] * f + m_vRight[j] * d + m_vUp[j] * c;
++			}
++		}
++	}
+ }
+ 
+ /*

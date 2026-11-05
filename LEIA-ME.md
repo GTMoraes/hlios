@@ -52,7 +52,9 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    continuam iguais), e o comando `ajustar_arma <frente|lado|altura|fov> <passo>` (ou `ajustar_arma zerar`)
    soma um passo e mostra os valores no meio da tela. Uma linha `modelo:*` (as que o app copia de outro jogo)
    vale para o modelo com esse nome quando não tem a linha do modelo exato; zerar uma arma assim grava a linha
-   exata zerada, para a copiada não voltar.
+   exata zerada, para a copiada não voltar. A posição vale também para os eventos da arma (o clarão do tiro
+   nasce onde a arma está), e a cvar `r_viewmodel_escala` (o motor grava, não é para mudar) diz ao cliente
+   quanto acertar os pontos da arma para o FOV dela (patch `jogos/*/0007`).
 5. **`0005-ios-fov-no-menu-do-jogo.patch`** (no `3rdparty/mainui`, o menu do jogo): três barras em
    Configuration › Video › Video options, à direita da imagem de teste: Field of view (`default_fov`), Weapon
    FOV (`r_viewmodel_fov`) e Weapon in hand FOV (`fov_arma`, só com um jogo aberto). Mudam na hora e mostram o
@@ -91,6 +93,11 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 - **`0006-sacar-animacao.patch`**: meio segundo depois de sacar, o cliente não prevê a arma. Com dados de um
   quadro atrasado, ele achava a arma parada e trocava a animação de sacar pela de parada, e a arma surgia de
   repente.
+- **`0007-clarao-na-arma.patch`**: com o FOV próprio da arma na mão, o clarão do tiro e os raios (gauss, egon)
+  saem dos pontos da arma, mas são desenhados com a lente do mundo. O cliente traz esses pontos para mais perto
+  da câmera, na mesma linha de visão, na proporção que o motor passa em `r_viewmodel_escala`: eles caem na boca
+  do cano e o clarão cresce junto com a arma. A menos de 6 unidades da câmera ele seria cortado; aí para ali e
+  se afasta do centro da vista o que falta, ficando no lugar certo e um pouco menor.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)

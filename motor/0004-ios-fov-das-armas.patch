@@ -1,8 +1,8 @@
 diff --git a/ref/gl/gl_local.h b/ref/gl/gl_local.h
-index 1a9b439..53cb79d 100644
+index 1a9b439..a574a6c 100644
 --- a/ref/gl/gl_local.h
 +++ b/ref/gl/gl_local.h
-@@ -800,6 +800,12 @@ extern convar_t	r_studio_lambert;
+@@ -800,6 +800,13 @@ extern convar_t	r_studio_lambert;
  extern convar_t	r_detailtextures;
  extern convar_t	r_novis;
  extern convar_t	r_nocull;
@@ -11,15 +11,16 @@ index 1a9b439..53cb79d 100644
 +extern convar_t	arma_frente;
 +extern convar_t	arma_lado;
 +extern convar_t	arma_altura;
++extern convar_t	r_viewmodel_escala;
 +void R_AjustarArma_f( void );
  extern convar_t	r_lockpvs;
  extern convar_t	r_lockfrustum;
  extern convar_t	r_traceglow;
 diff --git a/ref/gl/gl_opengl.c b/ref/gl/gl_opengl.c
-index 9163182..da890b3 100644
+index 9163182..b741e47 100644
 --- a/ref/gl/gl_opengl.c
 +++ b/ref/gl/gl_opengl.c
-@@ -28,6 +28,13 @@ CVAR_DEFINE_AUTO( r_lighting_ambient, "0.3", FCVAR_GLCONFIG, "map ambient lighti
+@@ -28,6 +28,15 @@ CVAR_DEFINE_AUTO( r_lighting_ambient, "0.3", FCVAR_GLCONFIG, "map ambient lighti
  CVAR_DEFINE_AUTO( r_detailtextures, "1", FCVAR_GLCONFIG, "enable detail textures support" );
  CVAR_DEFINE_AUTO( r_novis, "0", 0, "ignore vis information (perfomance test)" );
  CVAR_DEFINE_AUTO( r_nocull, "0", 0, "ignore frustrum culling (perfomance test)" );
@@ -30,10 +31,12 @@ index 9163182..da890b3 100644
 +CVAR_DEFINE_AUTO( arma_frente, "0", 0, "moves the weapon in hand forward (negative: back), saved per model" );
 +CVAR_DEFINE_AUTO( arma_lado, "0", 0, "moves the weapon in hand right (negative: left), saved per model" );
 +CVAR_DEFINE_AUTO( arma_altura, "0", 0, "moves the weapon in hand up (negative: down), saved per model" );
++// hlios: quanto a lente da arma na mão aumenta, para o client acertar os pontos dela (clarão, raios); não mude
++CVAR_DEFINE_AUTO( r_viewmodel_escala, "1", 0, "set by the renderer: weapon in hand attachment scale for its own fov" );
  CVAR_DEFINE_AUTO( r_lockpvs, "0", FCVAR_CHEAT, "lockpvs area at current point (pvs test)" );
  CVAR_DEFINE_AUTO( r_lockfrustum, "0", FCVAR_CHEAT, "lock frustrum area at current point (cull test)" );
  CVAR_DEFINE_AUTO( r_traceglow, "0", FCVAR_GLCONFIG, "cull flares behind models" );
-@@ -1235,6 +1242,12 @@ static void GL_InitCommands( void )
+@@ -1235,6 +1244,13 @@ static void GL_InitCommands( void )
  	gEngfuncs.Cvar_RegisterVariable( &r_lighting_ambient );
  	gEngfuncs.Cvar_RegisterVariable( &r_novis );
  	gEngfuncs.Cvar_RegisterVariable( &r_nocull );
@@ -42,11 +45,12 @@ index 9163182..da890b3 100644
 +	gEngfuncs.Cvar_RegisterVariable( &arma_frente );
 +	gEngfuncs.Cvar_RegisterVariable( &arma_lado );
 +	gEngfuncs.Cvar_RegisterVariable( &arma_altura );
++	gEngfuncs.Cvar_RegisterVariable( &r_viewmodel_escala );
 +	gEngfuncs.Cmd_AddCommand( "ajustar_arma", R_AjustarArma_f, "moves the weapon in hand: ajustar_arma <frente|lado|altura|fov> <step>, or ajustar_arma zerar" );
  	gEngfuncs.Cvar_RegisterVariable( &r_detailtextures );
  	gEngfuncs.Cvar_RegisterVariable( &r_lockpvs );
  	gEngfuncs.Cvar_RegisterVariable( &r_lockfrustum );
-@@ -1327,6 +1340,7 @@ GL_RemoveCommands
+@@ -1327,6 +1343,7 @@ GL_RemoveCommands
  static void GL_RemoveCommands( void )
  {
  	gEngfuncs.Cmd_RemoveCommand( "r_info" );
@@ -55,21 +59,68 @@ index 9163182..da890b3 100644
  }
  
 diff --git a/ref/gl/gl_studio.c b/ref/gl/gl_studio.c
-index 39873fb..7a52ba3 100644
+index 39873fb..326238b 100644
 --- a/ref/gl/gl_studio.c
 +++ b/ref/gl/gl_studio.c
-@@ -3319,9 +3319,322 @@ void R_RunViewmodelEvents( void )
- R_DrawViewModel
- =================
+@@ -1158,6 +1158,21 @@ StudioCalcAttachments
+ 
+ ====================
  */
 +/*
-+=============
-+R_ViewModelProjection
-+
-+hlios: projeção própria para a arma em primeira pessoa (r_viewmodel_fov), com o mesmo cálculo do mundo:
-+o fov vale para uma tela 4:3 e a tela larga só abre os lados (V_CalcFov e V_AdjustFov no cl_view.c)
-+=============
++hlios: com o fov próprio da arma (R_ViewModelProjection), a arma é desenhada com outra lente, mas o que sai
++dos pontos dela (o clarão do tiro, os raios da gauss e da egon) é desenhado com a lente do mundo. Cada ponto
++vem para mais perto da câmera na proporção da lente, na mesma linha de visão: cai no mesmo lugar da tela e o
++clarão cresce junto com a arma. A menos de 6 unidades ele seria cortado: aí para ali e se afasta do centro
++da vista o que falta. Vale só para a arma na mão, entre R_ViewModelAnexos e o fim do desenho dela (o mesmo
++cálculo está no client do HL e do OF, patch 0007 de jogos/hl e jogos/opfor)
 +*/
++static struct
++{
++	qboolean	ativo;
++	vec3_t		olho, frente, direita, cima;
++	float		escala;
++} hl_anexos;
++
+ static void R_StudioCalcAttachments( void )
+ {
+ 	// calculate attachment points
+@@ -1166,6 +1181,32 @@ static void R_StudioCalcAttachments( void )
+ 	for( int i = 0; i < Q_min( MAXSTUDIOATTACHMENTS, m_pStudioHeader->numattachments ); i++ )
+ 	{
+ 		Matrix3x4_VectorTransform( g_studio.lighttransform[pAtt[i].bone], pAtt[i].org, RI.currententity->attachment[i] );
++
++		if( hl_anexos.ativo && RI.currententity == tr.viewent )
++		{
++			vec3_t v, p;
++			float f, d, c, lado = 1.0f;
++
++			VectorSubtract( RI.currententity->attachment[i], hl_anexos.olho, v );
++			f = DotProduct( v, hl_anexos.frente );
++
++			if( f <= 1.0f || hl_anexos.escala <= 0.0f )
++				continue;
++
++			f /= hl_anexos.escala;
++			if( f < 6.0f )
++			{
++				lado = 6.0f / f;
++				f = 6.0f;
++			}
++
++			d = DotProduct( v, hl_anexos.direita ) * lado;
++			c = DotProduct( v, hl_anexos.cima ) * lado;
++
++			VectorMA( hl_anexos.olho, f, hl_anexos.frente, p );
++			VectorMA( p, d, hl_anexos.direita, p );
++			VectorMA( p, c, hl_anexos.cima, RI.currententity->attachment[i] );
++		}
+ 	}
+ }
+ 
+@@ -3282,6 +3323,319 @@ void R_DrawStudioModel( cl_entity_t *e )
+ 	}
+ }
+ 
 +/*
 +=============
 +R_FovArma
@@ -342,6 +393,81 @@ index 39873fb..7a52ba3 100644
 +	}
 +}
 +
++// hlios: o fov que vale para a arma na mão (abaixo de 10 é o do mundo, e aí fica 0)
++static float R_FovDaArma( const float *arma )
++{
++	float fov = arma[0];
++
++	if( fov < 10.0f )
++		fov = r_viewmodel_fov.value;
++
++	if( fov < 10.0f || FBitSet( RI.rvp.flags, RF_DRAW_OVERVIEW ))
++		return 0.0f;
++
++	return bound( 10.0f, fov, 170.0f );
++}
++
++// hlios: anda com a arma na mão (arma_frente, arma_lado e arma_altura) e liga o acerto dos pontos dela
++// (hl_anexos) para o fov dela; guarda a origem de antes em origem
++static void R_ViewModelAnexos( const float *arma, vec3_t origem )
++{
++	cl_entity_t *e = RI.currententity;
++	float fov = R_FovDaArma( arma );
++
++	AngleVectors( RI.rvp.viewangles, hl_anexos.frente, hl_anexos.direita, hl_anexos.cima );
++	VectorCopy( RI.rvp.vieworigin, hl_anexos.olho );
++
++	VectorCopy( e->origin, origem );
++	VectorMA( e->origin, arma[1], hl_anexos.frente, e->origin );
++	VectorMA( e->origin, arma[2], hl_anexos.direita, e->origin );
++	VectorMA( e->origin, arma[3], hl_anexos.cima, e->origin );
++
++	hl_anexos.escala = 1.0f;
++
++	if( fov > 0.0f )
++		hl_anexos.escala = tan( RI.rvp.fov_y * M_PI_F / 360.0f ) / ( tan( fov * M_PI_F / 360.0f ) * ( 480.0f / 640.0f ));
++
++	// o renderizador de modelos do jogo (o do client) calcula os pontos ele mesmo: a escala vai por cvar
++	if( fabs( hl_anexos.escala - r_viewmodel_escala.value ) > 0.0001f )
++		gEngfuncs.Cvar_SetValue( r_viewmodel_escala.name, hl_anexos.escala );
++
++	hl_anexos.ativo = true;
++}
++
+ /*
+ =================
+ R_RunViewmodelEvents
+@@ -3311,7 +3665,17 @@ void R_RunViewmodelEvents( void )
+ 		VectorCopy( simorg, RI.currententity->attachment[i] );
+ 	RI.currentmodel = RI.currententity->model;
+ 
+-	R_StudioDrawModelInternal( RI.currententity, STUDIO_EVENTS );
++	// hlios: os eventos (o clarão do tiro) saem da arma onde ela é vista: com a posição e o fov dela
++	{
++		float arma[FOVARMA_VALORES];
++		vec3_t origem;
++
++		R_FovArma( arma );
++		R_ViewModelAnexos( arma, origem );
++		R_StudioDrawModelInternal( RI.currententity, STUDIO_EVENTS );
++		VectorCopy( origem, RI.currententity->origin );
++		hl_anexos.ativo = false;
++	}
+ }
+ 
+ /*
+@@ -3319,9 +3683,50 @@ void R_RunViewmodelEvents( void )
+ R_DrawViewModel
+ =================
+ */
++/*
++=============
++R_ViewModelProjection
++
++hlios: projeção própria para a arma em primeira pessoa (r_viewmodel_fov), com o mesmo cálculo do mundo:
++o fov vale para uma tela 4:3 e a tela larga só abre os lados (V_CalcFov e V_AdjustFov no cl_view.c)
++=============
++*/
 +static qboolean R_ViewModelProjection( float fov )
 +{
 +	matrix4x4 m;
@@ -381,26 +507,24 @@ index 39873fb..7a52ba3 100644
  
  	R_GatherPlayerLight( view );
  
-@@ -3348,6 +3661,14 @@ void R_DrawViewModel( void )
+@@ -3348,6 +3753,11 @@ void R_DrawViewModel( void )
  	pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
  	RI.currentmodel = RI.currententity->model;
  
 +	// hlios: fov e posição da arma na mão (R_FovArma); a posição anda junto com a câmera
 +	R_FovArma( arma );
-+	VectorCopy( RI.currententity->origin, origemOriginal );
-+	VectorMA( RI.currententity->origin, arma[1], RI.vforward, RI.currententity->origin );
-+	VectorMA( RI.currententity->origin, arma[2], RI.vright, RI.currententity->origin );
-+	VectorMA( RI.currententity->origin, arma[3], RI.vup, RI.currententity->origin );
++	R_ViewModelAnexos( arma, origemOriginal );
 +	fovProprio = R_ViewModelProjection( arma[0] );
 +
  	switch( RI.currententity->model->type )
  	{
  	case mod_alias:
-@@ -3361,6 +3682,15 @@ void R_DrawViewModel( void )
+@@ -3361,6 +3771,16 @@ void R_DrawViewModel( void )
  
  	// restore depth range
  	pglDepthRange( gldepthmin, gldepthmax );
 +	VectorCopy( origemOriginal, RI.currententity->origin );
++	hl_anexos.ativo = false;
 +
 +	// hlios: volta a projeção do mundo
 +	if( fovProprio )
