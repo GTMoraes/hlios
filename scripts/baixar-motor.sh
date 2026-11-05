@@ -10,7 +10,8 @@ cd "$TRAB/xash"
 #    0001 bibliotecas carregadas de dentro de Frameworks/ (o App Store Connect recusa .dylib solto)
 #    0002 o app vai para a tela inicial e fecha ao sair do jogo (antes ficava numa tela preta)
 #    0003 toque rápido na área de olhar atira; toque duplo e segurar atira sem parar (cvar touch_look_fire)
-#    0004 campo de visão só da arma em primeira pessoa (cvar r_viewmodel_fov)
+#    0004 campo de visão só da arma em primeira pessoa (cvar r_viewmodel_fov) e só da arma na mão (cvar fov_arma)
+#    0005 as barras de campo de visão no menu do jogo (3rdparty/mainui, Video options)
 for p in "$RAIZ"/motor/*.patch; do
 	git apply --verbose "$p"
 done

@@ -1,41 +1,45 @@
 diff --git a/ref/gl/gl_local.h b/ref/gl/gl_local.h
-index 1a9b439..06310a9 100644
+index 1a9b439..0f6345b 100644
 --- a/ref/gl/gl_local.h
 +++ b/ref/gl/gl_local.h
-@@ -800,6 +800,7 @@ extern convar_t	r_studio_lambert;
+@@ -800,6 +800,8 @@ extern convar_t	r_studio_lambert;
  extern convar_t	r_detailtextures;
  extern convar_t	r_novis;
  extern convar_t	r_nocull;
 +extern convar_t	r_viewmodel_fov;
++extern convar_t	fov_arma;
  extern convar_t	r_lockpvs;
  extern convar_t	r_lockfrustum;
  extern convar_t	r_traceglow;
 diff --git a/ref/gl/gl_opengl.c b/ref/gl/gl_opengl.c
-index 9163182..b503de8 100644
+index 9163182..0280ec5 100644
 --- a/ref/gl/gl_opengl.c
 +++ b/ref/gl/gl_opengl.c
-@@ -28,6 +28,8 @@ CVAR_DEFINE_AUTO( r_lighting_ambient, "0.3", FCVAR_GLCONFIG, "map ambient lighti
+@@ -28,6 +28,10 @@ CVAR_DEFINE_AUTO( r_lighting_ambient, "0.3", FCVAR_GLCONFIG, "map ambient lighti
  CVAR_DEFINE_AUTO( r_detailtextures, "1", FCVAR_GLCONFIG, "enable detail textures support" );
  CVAR_DEFINE_AUTO( r_novis, "0", 0, "ignore vis information (perfomance test)" );
  CVAR_DEFINE_AUTO( r_nocull, "0", 0, "ignore frustrum culling (perfomance test)" );
 +// hlios: campo de visão só da arma em primeira pessoa, na mesma escala do default_fov (0 = o mesmo do mundo)
 +CVAR_DEFINE_AUTO( r_viewmodel_fov, "0", FCVAR_ARCHIVE, "view model field of view, like default_fov (0 = same as the world)" );
++// hlios: campo de visão só da arma na mão, guardado por modelo (0 = vale o r_viewmodel_fov)
++CVAR_DEFINE_AUTO( fov_arma, "0", 0, "field of view of the weapon in hand, saved per model (0 = use r_viewmodel_fov)" );
  CVAR_DEFINE_AUTO( r_lockpvs, "0", FCVAR_CHEAT, "lockpvs area at current point (pvs test)" );
  CVAR_DEFINE_AUTO( r_lockfrustum, "0", FCVAR_CHEAT, "lock frustrum area at current point (cull test)" );
  CVAR_DEFINE_AUTO( r_traceglow, "0", FCVAR_GLCONFIG, "cull flares behind models" );
-@@ -1235,6 +1237,7 @@ static void GL_InitCommands( void )
+@@ -1235,6 +1239,8 @@ static void GL_InitCommands( void )
  	gEngfuncs.Cvar_RegisterVariable( &r_lighting_ambient );
  	gEngfuncs.Cvar_RegisterVariable( &r_novis );
  	gEngfuncs.Cvar_RegisterVariable( &r_nocull );
 +	gEngfuncs.Cvar_RegisterVariable( &r_viewmodel_fov );
++	gEngfuncs.Cvar_RegisterVariable( &fov_arma );
  	gEngfuncs.Cvar_RegisterVariable( &r_detailtextures );
  	gEngfuncs.Cvar_RegisterVariable( &r_lockpvs );
  	gEngfuncs.Cvar_RegisterVariable( &r_lockfrustum );
 diff --git a/ref/gl/gl_studio.c b/ref/gl/gl_studio.c
-index 39873fb..5e09725 100644
+index 39873fb..603fcec 100644
 --- a/ref/gl/gl_studio.c
 +++ b/ref/gl/gl_studio.c
-@@ -3319,9 +3319,45 @@ void R_RunViewmodelEvents( void )
+@@ -3319,9 +3319,174 @@ void R_RunViewmodelEvents( void )
  R_DrawViewModel
  =================
  */
@@ -47,13 +51,142 @@ index 39873fb..5e09725 100644
 +o fov vale para uma tela 4:3 e a tela larga só abre os lados (V_CalcFov e V_AdjustFov no cl_view.c)
 +=============
 +*/
++/*
++=============
++R_FovArma
++
++hlios: campo de visão próprio de cada arma (cvar fov_arma; abaixo de 10 vale o r_viewmodel_fov).
++Fica em fov_armas.txt, na pasta do jogo, por modelo: o nome e o tamanho do arquivo, para que um
++modelo trocado (o de uma pasta _addon ou _hd) tenha o seu. O cvar mostra o valor da arma na mão;
++mudar o cvar (no console ou no menu) muda o da arma na mão.
++=============
++*/
++#define FOVARMA_ARQUIVO	"fov_armas.txt"
++#define FOVARMA_MAX	128
++#define FOVARMA_CHAVE	96
++
++typedef struct
++{
++	char	chave[FOVARMA_CHAVE];
++	float	fov;
++} fovarma_t;
++
++static fovarma_t	fovarmas[FOVARMA_MAX];
++static int		numfovarmas;
++static char		fovarmas_jogo[64];		// pasta do jogo da lista carregada
++static char		fovarma_mao[FOVARMA_CHAVE];	// modelo da arma na mão
++static float		fovarma_visto;			// o valor do cvar na última olhada
++
++static void R_FovArmaCarregar( void )
++{
++	const char *jogo = gEngfuncs.fsapi->Gamedir();
++	char linha[256], nome[FOVARMA_CHAVE];
++	file_t *f;
++	float fov;
++	int c;
++
++	if( !jogo || !Q_strcmp( jogo, fovarmas_jogo ))
++		return;
++
++	Q_strncpy( fovarmas_jogo, jogo, sizeof( fovarmas_jogo ));
++	numfovarmas = 0;
++	fovarma_mao[0] = 0;
++
++	if(( f = gEngfuncs.fsapi->Open( FOVARMA_ARQUIVO, "r", true )) == NULL )
++		return;
++
++	do
++	{
++		c = gEngfuncs.fsapi->Gets( f, linha, sizeof( linha ));
++
++		if( numfovarmas < FOVARMA_MAX && sscanf( linha, "%95s %f", nome, &fov ) == 2 && fov >= 10.0f )
++		{
++			Q_strncpy( fovarmas[numfovarmas].chave, nome, FOVARMA_CHAVE );
++			fovarmas[numfovarmas].fov = fov;
++			numfovarmas++;
++		}
++	} while( c >= 0 );
++
++	gEngfuncs.fsapi->Close( f );
++}
++
++static void R_FovArmaSalvar( void )
++{
++	file_t *f;
++	int i;
++
++	if(( f = gEngfuncs.fsapi->Open( FOVARMA_ARQUIVO, "w", true )) == NULL )
++		return;
++
++	gEngfuncs.fsapi->Print( f, "// hlios: campo de visao de cada arma (no console: fov_arma, com a arma na mao)\n" );
++
++	for( i = 0; i < numfovarmas; i++ )
++		gEngfuncs.fsapi->Printf( f, "%s %g\n", fovarmas[i].chave, fovarmas[i].fov );
++
++	gEngfuncs.fsapi->Close( f );
++}
++
++static float R_FovArma( void )
++{
++	model_t *mod = RI.currententity->model;
++	studiohdr_t *hdr = (studiohdr_t *)gEngfuncs.Mod_Extradata( mod_studio, mod );
++	char chave[FOVARMA_CHAVE];
++	float v = fov_arma.value;
++	int i;
++
++	R_FovArmaCarregar();
++	Q_snprintf( chave, sizeof( chave ), "%s:%d", mod->name, hdr ? (int)hdr->length : 0 );
++
++	for( i = 0; i < numfovarmas; i++ )
++	{
++		if( !Q_strcmp( fovarmas[i].chave, chave ))
++			break;
++	}
++
++	if( Q_strcmp( chave, fovarma_mao ))
++	{
++		// outra arma na mão: o cvar passa a mostrar o valor dela
++		Q_strncpy( fovarma_mao, chave, sizeof( fovarma_mao ));
++		v = ( i < numfovarmas ) ? fovarmas[i].fov : 0.0f;
++
++		if( fabs( v - fov_arma.value ) > 0.01f )
++			gEngfuncs.Cvar_SetValue( fov_arma.name, v );
++	}
++	else if( fabs( v - fovarma_visto ) > 0.01f )
++	{
++		// mudaram o cvar: vale para a arma na mão
++		if( v < 10.0f )
++		{
++			if( i < numfovarmas )
++				fovarmas[i] = fovarmas[--numfovarmas];
++		}
++		else if( i < numfovarmas )
++			fovarmas[i].fov = v;
++		else if( numfovarmas < FOVARMA_MAX )
++		{
++			Q_strncpy( fovarmas[numfovarmas].chave, chave, FOVARMA_CHAVE );
++			fovarmas[numfovarmas].fov = v;
++			numfovarmas++;
++		}
++
++		R_FovArmaSalvar();
++	}
++
++	fovarma_visto = v;
++	return v;
++}
++
 +static qboolean R_ViewModelProjection( void )
 +{
 +	matrix4x4 m;
-+	float fov = r_viewmodel_fov.value;
++	float fov = R_FovArma();
 +	GLfloat zNear = 4.0f, zFar, yMax, xMax, aspecto;
 +
-+	if( fov <= 0.0f || FBitSet( RI.rvp.flags, RF_DRAW_OVERVIEW ))
++	if( fov < 10.0f )
++		fov = r_viewmodel_fov.value;
++
++	// abaixo de 10, a arma usa a projeção do mundo
++	if( fov < 10.0f || FBitSet( RI.rvp.flags, RF_DRAW_OVERVIEW ))
 +		return false;
 +
 +	fov = bound( 10.0f, fov, 170.0f );
@@ -81,7 +214,7 @@ index 39873fb..5e09725 100644
  
  	R_GatherPlayerLight( view );
  
-@@ -3347,6 +3383,7 @@ void R_DrawViewModel( void )
+@@ -3347,6 +3512,7 @@ void R_DrawViewModel( void )
  	// adjust the depth range to prevent view model from poking into walls
  	pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
  	RI.currentmodel = RI.currententity->model;
@@ -89,7 +222,7 @@ index 39873fb..5e09725 100644
  
  	switch( RI.currententity->model->type )
  	{
-@@ -3361,6 +3398,14 @@ void R_DrawViewModel( void )
+@@ -3361,6 +3527,14 @@ void R_DrawViewModel( void )
  
  	// restore depth range
  	pglDepthRange( gldepthmin, gldepthmax );

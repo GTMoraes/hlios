@@ -85,6 +85,9 @@ static NSUserDefaults *HL_Prefs( void )
 		@"hl.toque": @1,
 		@"hl.fov": @90,
 		@"hl.fovarmas": @90,
+		@"hl.fov.mudou": @NO,
+		@"hl.fovarmas.mudou": @NO,
+		@"hl.ultimosave": @NO,
 		@"hl.extras": @"",
 		@"hl.jogo": @"valve"
 	}];
@@ -360,6 +363,66 @@ static void HL_PrepararVFS( const char *pasta )
 		writeToFile:cfg atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 }
 
+// os jogos com campanha (e saves): o HL, o OF e o BS
+static BOOL HL_TemCampanha( const char *pasta )
+{
+	return !strcmp( pasta, "valve" ) || !strcmp( pasta, "gearbox" ) || !strcmp( pasta, "bshift" );
+}
+
+// um cvar gravado no config.cfg do jogo (o motor grava ali, ao sair, os cvars guardados); nil se não tem
+static NSString *HL_CvarDoJogo( const char *pasta, NSString *cvar )
+{
+	NSString *cfg = [[HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )]
+		stringByAppendingPathComponent:@"config.cfg"];
+	NSString *texto = [NSString stringWithContentsOfFile:cfg encoding:NSUTF8StringEncoding error:NULL];
+	NSString *inicio = [cvar stringByAppendingString:@" "];
+
+	if( texto == nil )
+		texto = [NSString stringWithContentsOfFile:cfg encoding:NSISOLatin1StringEncoding error:NULL];
+
+	for( NSString *l in [texto componentsSeparatedByString:@"\n"] )
+	{
+		NSString *limpa = [l stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+		if( [limpa hasPrefix:inicio] )
+		{
+			NSString *valor = [[limpa substringFromIndex:[inicio length]]
+				stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
+			return [valor stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"\""]];
+		}
+	}
+
+	return nil;
+}
+
+// o save mais novo do jogo (os de nome, os automáticos e o rápido), sem o .sav; nil se não tem nenhum
+static NSString *HL_UltimoSave( const char *pasta )
+{
+	NSString *dir = [[HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )] stringByAppendingPathComponent:@"save"];
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *melhor = nil;
+	NSDate *quando = nil;
+
+	for( NSString *nome in [fm contentsOfDirectoryAtPath:dir error:NULL] )
+	{
+		NSDate *d;
+
+		if( ![[[nome pathExtension] lowercaseString] isEqualToString:@"sav"] )
+			continue;
+
+		d = [[fm attributesOfItemAtPath:[dir stringByAppendingPathComponent:nome] error:NULL] fileModificationDate];
+
+		if( d != nil && ( quando == nil || [d compare:quando] == NSOrderedDescending ))
+		{
+			quando = d;
+			melhor = [nome stringByDeletingPathExtension];
+		}
+	}
+
+	return melhor;
+}
+
 static void HL_MontarArgs( const hl_jogo_t *jogo )
 {
 	NSUserDefaults *p = HL_Prefs();
@@ -379,11 +442,23 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"-console"];
 
 	// campo de visão do mundo (default_fov, em 4:3; a tela larga só abre os lados) e o da arma em primeira
-	// pessoa (r_viewmodel_fov, patch 0004 do motor), na mesma escala
-	[a addObject:@"+default_fov"];
-	[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.fov"]]];
-	[a addObject:@"+r_viewmodel_fov"];
-	[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.fovarmas"]]];
+	// pessoa (r_viewmodel_fov, patch 0004 do motor), na mesma escala. Cada jogo guarda os seus no
+	// config.cfg, e eles também mudam no menu do jogo: daqui só vão quando mexeram nas barras
+	if( [p boolForKey:@"hl.fov.mudou"] )
+	{
+		[a addObject:@"+default_fov"];
+		[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.fov"]]];
+		[p setBool:NO forKey:@"hl.fov.mudou"];
+	}
+
+	if( [p boolForKey:@"hl.fovarmas.mudou"] )
+	{
+		NSInteger armas = [p integerForKey:@"hl.fovarmas"];
+
+		[a addObject:@"+r_viewmodel_fov"];
+		[a addObject:[NSString stringWithFormat:@"%d", armas < 10 ? 0 : (int)armas]];
+		[p setBool:NO forKey:@"hl.fovarmas.mudou"];
+	}
 
 	if( [p boolForKey:@"hl.diagnostico"] )
 	{
@@ -411,7 +486,7 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	}
 
 	// mira assistida (patch jogos/*/0001-mira-assistida.patch): só no HL, no OF e no BS
-	if( !strcmp( jogo->pasta, "valve" ) || !strcmp( jogo->pasta, "gearbox" ) || !strcmp( jogo->pasta, "bshift" ))
+	if( HL_TemCampanha( jogo->pasta ))
 	{
 		// os botões de número trocam de arma no toque, sem abrir a lista do grupo
 		[a addObject:@"+hud_fastswitch"];
@@ -430,6 +505,19 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"hlios.cfg"];
 
 	HL_Juntar( a, [p stringForKey:@"hl.extras"] );
+
+	// abrir no último save: por último, depois de todos os ajustes
+	if( [p boolForKey:@"hl.ultimosave"] && HL_TemCampanha( jogo->pasta ))
+	{
+		NSString *save = HL_UltimoSave( jogo->pasta );
+
+		if( save != nil )
+		{
+			[a addObject:@"+load"];
+			[a addObject:[save rangeOfString:@" "].location != NSNotFound ?
+				[NSString stringWithFormat:@"\"%@\"", save] : save];
+		}
+	}
 
 	s_argc = (int)[a count];
 	s_argv = (char **)calloc( (size_t)s_argc + 1, sizeof( char * ));
@@ -470,10 +558,12 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	UISwitch *chaveAddon;
 	UISegmentedControl *escolhaMira;
 	UISlider *barraFov, *barraFovArmas;
-	UILabel *rotuloFov, *rotuloFovArmas;
+	UILabel *rotuloFov, *rotuloFovArmas, *notaFov;
+	UISwitch *chaveSave;
 	UIButton *botaoExtras;
 }
 - (void)recarregar;
+- (void)lerFovDoJogo;
 @end
 
 @implementation HLTela
@@ -567,13 +657,15 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	chaveDiag = [self chave:@"hl.diagnostico"];
 	chaveHD = [self chave:@"hl.hd"];
 	chaveAddon = [self chave:@"hl.addon"];
+	chaveSave = [self chave:@"hl.ultimosave"];
 
-	// campo de visão (60 a 120; 90 é o original), do mundo e da arma em primeira pessoa
+	// campo de visão do mundo (60 a 120; 90 é o original) e da arma em primeira pessoa (10 a 120; 9 é
+	// "igual ao do mundo"). Mostram o que está salvo no último jogo aberto (veja recarregar)
 	rotuloFov = [self rotulo:@"" tamanho:15 peso:UIFontWeightRegular cor:[UIColor whiteColor]];
 	rotuloFovArmas = [self rotulo:@"" tamanho:15 peso:UIFontWeightRegular cor:[UIColor whiteColor]];
-	barraFov = [self barra:@"hl.fov"];
-	barraFovArmas = [self barra:@"hl.fovarmas"];
-	[self atualizarFov];
+	notaFov = [self rotulo:@"" tamanho:12 peso:UIFontWeightRegular cor:[UIColor grayColor]];
+	barraFov = [self barra:@"hl.fov" minimo:60];
+	barraFovArmas = [self barra:@"hl.fovarmas" minimo:9];
 
 	// mira assistida: 0 desligada, 1 normal (a do jogo, também no Difícil), 2 forte, 3 muito forte
 	rotuloMira = [self rotulo:@"Mira assistida (vale também no Difícil)" tamanho:15 peso:UIFontWeightRegular
@@ -601,10 +693,11 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[self linha:@"Log detalhado (diagnóstico)" chave:chaveDiag],
 		[self linha:@"Modelos HD" chave:chaveHD],
 		[self linha:@"Conteúdo extra (pastas _addon)" chave:chaveAddon],
+		[self linha:@"Abrir no último save (HL, OF e BS)" chave:chaveSave],
 		rotuloToque, escolhaToque,
 		rotuloMira, escolhaMira,
 		rotuloFov, barraFov,
-		rotuloFovArmas, barraFovArmas,
+		rotuloFovArmas, barraFovArmas, notaFov,
 		botaoExtras, ajuda
 	]];
 	direita.axis = UILayoutConstraintAxisVertical;
@@ -618,7 +711,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	[direita setCustomSpacing:2 afterView:rotuloFov];
 	[direita setCustomSpacing:10 afterView:barraFov];
 	[direita setCustomSpacing:2 afterView:rotuloFovArmas];
-	[direita setCustomSpacing:12 afterView:barraFovArmas];
+	[direita setCustomSpacing:4 afterView:barraFovArmas];
+	[direita setCustomSpacing:12 afterView:notaFov];
 
 	// a coluna da direita rola, para caber em qualquer iPhone
 	rolagem = [[UIScrollView alloc] init];
@@ -710,6 +804,29 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[listaJogos addArrangedSubview:[self rotulo:@"Esta build não tem nenhum jogo." tamanho:15
 			peso:UIFontWeightRegular cor:[UIColor whiteColor]]];
 	}
+
+	[self lerFovDoJogo];
+}
+
+// as barras mostram o que está salvo no último jogo aberto, até alguém mexer nelas
+- (void)lerFovDoJogo
+{
+	NSUserDefaults *p = HL_Prefs();
+	const char *pasta = [[p stringForKey:@"hl.jogo"] UTF8String];
+	NSString *v;
+
+	if( pasta == NULL )
+		pasta = "valve";
+
+	if( ![p boolForKey:@"hl.fov.mudou"] && ( v = HL_CvarDoJogo( pasta, @"default_fov" )) != nil && [v intValue] > 0 )
+		[p setInteger:[v intValue] forKey:@"hl.fov"];
+
+	if( ![p boolForKey:@"hl.fovarmas.mudou"] && ( v = HL_CvarDoJogo( pasta, @"r_viewmodel_fov" )) != nil )
+		[p setInteger:( [v intValue] < 10 ) ? 9 : [v intValue] forKey:@"hl.fovarmas"];
+
+	barraFov.value = (float)[p integerForKey:@"hl.fov"];
+	barraFovArmas.value = (float)[p integerForKey:@"hl.fovarmas"];
+	[self atualizarFov];
 }
 
 - (void)mudouOpcao:(UISwitch *)s
@@ -726,13 +843,15 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[p setBool:s.on forKey:@"hl.hd"];
 	else if( s == chaveAddon )
 		[p setBool:s.on forKey:@"hl.addon"];
+	else if( s == chaveSave )
+		[p setBool:s.on forKey:@"hl.ultimosave"];
 }
 
-- (UISlider *)barra:(NSString *)chave
+- (UISlider *)barra:(NSString *)chave minimo:(float)minimo
 {
 	UISlider *b = [[UISlider alloc] init];
 
-	b.minimumValue = 60;
+	b.minimumValue = minimo;
 	b.maximumValue = 120;
 	b.value = (float)[HL_Prefs() integerForKey:chave];
 	b.minimumTrackTintColor = HL_Laranja();
@@ -745,9 +864,30 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 {
 	NSInteger fov = [HL_Prefs() integerForKey:@"hl.fov"], armas = [HL_Prefs() integerForKey:@"hl.fovarmas"];
 
-	rotuloFov.text = [NSString stringWithFormat:@"Campo de visão: %d%@", (int)fov, fov == 90 ? @" (original)" : @""];
-	rotuloFovArmas.text = [NSString stringWithFormat:@"Campo de visão das armas: %d%@", (int)armas,
-		armas == 90 ? @" (original)" : @""];
+	NSUserDefaults *p = HL_Prefs();
+	NSString *jogo = [p stringForKey:@"hl.jogo"], *nome = @"Half-Life";
+	int i;
+
+	for( i = 0; i < HL_NUM_JOGOS; i++ )
+	{
+		if( [jogo isEqualToString:HL_Texto( s_jogos[i].pasta )] )
+			nome = HL_Texto( s_jogos[i].titulo );
+	}
+
+	rotuloFov.text = [NSString stringWithFormat:@"Campo de visão: %d%@%@", (int)fov, fov == 90 ? @" (original)" : @"",
+		[p boolForKey:@"hl.fov.mudou"] ? @" · vale no próximo jogo aberto" : @""];
+
+	if( armas < 10 )
+		rotuloFovArmas.text = @"Campo de visão das armas: igual ao do mundo";
+	else
+		rotuloFovArmas.text = [NSString stringWithFormat:@"Campo de visão das armas: %d%@", (int)armas,
+			armas == 90 ? @" (original)" : @""];
+
+	if( [p boolForKey:@"hl.fovarmas.mudou"] )
+		rotuloFovArmas.text = [rotuloFovArmas.text stringByAppendingString:@" · vale no próximo jogo aberto"];
+
+	notaFov.text = [NSString stringWithFormat:@"Mostrando os do %@, o último aberto. Cada jogo guarda os seus, e "
+		@"no jogo eles mudam em Configuration › Video › Video options, junto com o da arma na mão.", nome];
 }
 
 - (void)mudouFov:(UISlider *)b
@@ -760,6 +900,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 
 	b.value = (float)v;
 	[HL_Prefs() setInteger:v forKey:( b == barraFov ) ? @"hl.fov" : @"hl.fovarmas"];
+	[HL_Prefs() setBool:YES forKey:( b == barraFov ) ? @"hl.fov.mudou" : @"hl.fovarmas.mudou"];
 	[self atualizarFov];
 }
 

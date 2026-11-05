@@ -43,8 +43,16 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    todos os jogos.
 4. **`0004-ios-fov-das-armas.patch`**: cria a cvar `r_viewmodel_fov`, o campo de visão só da arma em primeira
    pessoa, na mesma escala do `default_fov` (vale para 4:3, e a tela larga só abre os lados). `0` usa o mesmo
-   do mundo, como o original. A arma é desenhada com uma projeção própria e depois volta a do mundo.
-5. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+   do mundo, como o original (abaixo de 10 também). A arma é desenhada com uma projeção própria e depois volta a
+   do mundo. Cria também a cvar `fov_arma`, o campo de visão só da arma na mão: no console, com a arma na mão,
+   `fov_arma 60` (e `fov_arma 0` volta ao `r_viewmodel_fov`). Fica em `fov_armas.txt`, na pasta do jogo, por
+   modelo (o nome e o tamanho do arquivo, então um modelo trocado numa pasta `_addon` tem o seu). Ao trocar de
+   arma, a cvar passa a mostrar o valor da nova.
+5. **`0005-ios-fov-no-menu-do-jogo.patch`** (no `3rdparty/mainui`, o menu do jogo): três barras em
+   Configuration › Video › Video options, à direita da imagem de teste: Field of view (`default_fov`), Weapon
+   FOV (`r_viewmodel_fov`) e Weapon in hand FOV (`fov_arma`, só com um jogo aberto). Mudam na hora e mostram o
+   valor; o ponto mais à esquerda das duas das armas é "igual ao do mundo" e "igual ao Weapon FOV".
+6. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
 ### Mudanças nos jogos (`jogos/`)
@@ -161,8 +169,14 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   no `vfs.cfg` do jogo antes de abrir, então valem já na mesma abertura. Ligados por padrão. As pastas
   `<jogo>_addon` (por exemplo, armas trocadas) ficam ao lado de `valve`, `gearbox` e `bshift` e passam na
   frente das `_hd` e das originais.
-- **Campo de visão** e **Campo de visão das armas**: de 60 a 120 (90 é o original), viram `default_fov` e
-  `r_viewmodel_fov`. Menos que 90 aproxima (alvos maiores, menos coisa nas laterais).
+- **Campo de visão** (60 a 120) e **Campo de visão das armas** (10 a 120, ou "igual ao do mundo"): 90 é o
+  original. Viram `default_fov` e `r_viewmodel_fov`. Menos que 90 aproxima (alvos maiores, menos coisa nas
+  laterais); na arma, menos que 90 é uma lente que a aumenta a partir do centro da tela. Cada jogo guarda os
+  seus no `config.cfg`, e eles também mudam no menu do jogo: as barras mostram os do último jogo aberto e só
+  vão para o jogo quando alguém mexe nelas (valem para o próximo jogo aberto).
+- **Abrir no último save (HL, OF e BS)**: desligado por padrão. Ligado, o app procura o `.sav` mais novo na
+  pasta `save` do jogo (os de nome, os automáticos e o rápido) e passa `+load <nome>` no fim da linha de
+  comando. Sem save, abre o menu normal.
 - **Console**: o app sempre passa `-console`, e põe um botão de teclado no alto da tela (`"console"`,
   `toggleconsole`) em todos os jogos.
 - **Mira assistida**: Desligada, Normal, Forte (padrão) ou Muito forte, vira o `sv_aim_assist` 0 a 3 (só no
@@ -179,7 +193,7 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Números das armas**: no HL, no OF e no BS o app põe botões fixos com os números (`"num1"` a `"num5"`, e
   `"num6"` e `"num7"` no OF, que tem 7 grupos), numa fileira no alto da tela, e liga `hud_fastswitch 1` para o
   toque trocar de arma direto. Tocar de novo no mesmo número passa para a próxima arma do grupo.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +hud_fastswitch 1 -console +default_fov +r_viewmodel_fov +sv_aim_assist 0-3 +exec hlios.cfg`, e
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +hud_fastswitch 1 -console +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 
