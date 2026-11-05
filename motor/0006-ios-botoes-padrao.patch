@@ -1,0 +1,20 @@
+diff --git a/engine/client/input/in_touch.c b/engine/client/input/in_touch.c
+index 846aa35..2dd851b 100644
+--- a/engine/client/input/in_touch.c
++++ b/engine/client/input/in_touch.c
+@@ -980,6 +980,15 @@ void Touch_AddClientButton( const char *name, const char *texture, const char *c
+ 
+ static void Touch_LoadDefaults_f( void )
+ {
++	// hlios: o padrão dos botões vem do touch_padrao.cfg da pasta do jogo, quando tem (o app grava esse
++	// arquivo para o HL, o OF e o BS). Vale para um jogo sem touch.cfg e para o Reset do menu Touch
++	if( FS_FileExists( "touch_padrao.cfg", true ))
++	{
++		Cbuf_InsertText( "exec touch_padrao.cfg\n" );
++		touch.configchanged = true;
++		return;
++	}
++
+ 	for( int i = 0; i < g_DefaultButtonsLength; i++ )
+ 	{
+ 		touch_button_t *button;

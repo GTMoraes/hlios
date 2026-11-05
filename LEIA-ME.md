@@ -47,12 +47,18 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    do mundo. Cria também a cvar `fov_arma`, o campo de visão só da arma na mão: no console, com a arma na mão,
    `fov_arma 60` (e `fov_arma 0` volta ao `r_viewmodel_fov`). Fica em `fov_armas.txt`, na pasta do jogo, por
    modelo (o nome e o tamanho do arquivo, então um modelo trocado numa pasta `_addon` tem o seu). Ao trocar de
-   arma, a cvar passa a mostrar o valor da nova.
+   arma, a cvar passa a mostrar o valor da nova. Do mesmo jeito, `arma_frente`, `arma_lado` e `arma_altura`
+   mudam a posição da arma na mão (em unidades do jogo, junto com a câmera; só o desenho, a mira e os tiros
+   continuam iguais), e o comando `ajustar_arma <frente|lado|altura|fov> <passo>` (ou `ajustar_arma zerar`)
+   soma um passo e mostra os valores no meio da tela.
 5. **`0005-ios-fov-no-menu-do-jogo.patch`** (no `3rdparty/mainui`, o menu do jogo): três barras em
    Configuration › Video › Video options, à direita da imagem de teste: Field of view (`default_fov`), Weapon
    FOV (`r_viewmodel_fov`) e Weapon in hand FOV (`fov_arma`, só com um jogo aberto). Mudam na hora e mostram o
    valor; o ponto mais à esquerda das duas das armas é "igual ao do mundo" e "igual ao Weapon FOV".
-6. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+6. **`0006-ios-botoes-padrao.patch`**: o padrão dos botões de toque (o de um jogo sem `touch.cfg` e o do Reset
+   no menu Touch) passa a vir do `touch_padrao.cfg` da pasta do jogo, quando ele existe. O app grava esse
+   arquivo no HL, no OF e no BS a cada abertura.
+7. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
 ### Mudanças nos jogos (`jogos/`)
@@ -176,7 +182,16 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   vão para o jogo quando alguém mexe nelas (valem para o próximo jogo aberto).
 - **Abrir no último save (HL, OF e BS)**: desligado por padrão. Ligado, o app procura o `.sav` mais novo na
   pasta `save` do jogo (os de nome, os automáticos e o rápido) e passa `+load <nome>` no fim da linha de
-  comando. Sem save, abre o menu normal.
+  comando. Sem save, abre o menu normal. A pasta pode se chamar `save` ou `SAVE` (a que vem da Steam). O que o
+  app decidiu fica no `engine.log`, numa linha que começa com `hlios:`.
+- **Botões padrão (HL, OF e BS)**: o layout da 0.1.15, com o 6 e o 7 do OF logo depois do 5 e os
+  botões de ajustar a arma. Vale num jogo sem `touch.cfg` e no Reset do menu Touch.
+- **Usar os botões do Half-Life no OF e no BS**: botão na tela inicial que pergunta antes e copia o
+  `valve/touch.cfg` para `gearbox` e `bshift`. O de antes fica como `touch-antigo.cfg` (ou `touch-antigo-2.cfg`
+  e assim por diante, sem apagar nenhum).
+- **Ajustar a arma (HL, OF e BS)**: o botão laranja AJUSTAR ARMA mostra e esconde um bloco de botões no meio da
+  tela: PERTO, LONGE, SUBIR, DESCER, ESQ., DIR. (0,5 unidade por toque), FOV - e FOV + (2 por toque) e ZERAR.
+  Tudo vale para a arma na mão e fica salvo por modelo. O botão AJUSTAR ARMA dá para esconder no editor.
 - **Console**: o app sempre passa `-console`, e põe um botão de teclado no alto da tela (`"console"`,
   `toggleconsole`) em todos os jogos.
 - **Mira assistida**: Desligada, Normal, Forte (padrão) ou Muito forte, vira o `sv_aim_assist` 0 a 3 (só no

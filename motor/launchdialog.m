@@ -190,6 +190,176 @@ static void HL_CriarLeiaMe( void )
 		[texto writeToFile:caminho atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 }
 
+// layout padrão dos botões no HL, no OF e no BS (da 0.1.15): vira o touch_padrao.cfg do jogo,
+// que o motor usa num jogo sem touch.cfg e no Reset do menu Touch (patch 0006 do motor)
+static NSString *const s_touchPadrao =
+	@"// touch cvars\n"
+	@"\n"
+	@"// sensitivity settings\n"
+	@"touch_pitch \"90\"\n"
+	@"touch_yaw \"120\"\n"
+	@"touch_forwardzone \"0.06\"\n"
+	@"touch_sidezone \"0.06\"\n"
+	@"touch_nonlinear_look \"0\"\n"
+	@"touch_pow_factor \"1.3\"\n"
+	@"touch_pow_mult \"400\"\n"
+	@"touch_exp_mult \"0\"\n"
+	@"\n"
+	@"// grid settings\n"
+	@"touch_grid_count \"50\"\n"
+	@"touch_grid_enable \"1\"\n"
+	@"\n"
+	@"// global overstroke (width, r, g, b, a)\n"
+	@"touch_set_stroke 1 255 255 255 255\n"
+	@"\n"
+	@"// highlight when pressed\n"
+	@"touch_highlight_r \"1\"\n"
+	@"touch_highlight_g \"1\"\n"
+	@"touch_highlight_b \"1\"\n"
+	@"touch_highlight_a \"1\"\n"
+	@"\n"
+	@"// _joy and _dpad options\n"
+	@"touch_dpad_radius \"1\"\n"
+	@"touch_joy_radius \"1\"\n"
+	@"\n"
+	@"// how much slowdown when Precise Look button pressed\n"
+	@"touch_precise_amount \"0.5\"\n"
+	@"\n"
+	@"// enable/disable move indicator\n"
+	@"touch_move_indicator \"0\"\n"
+	@"\n"
+	@"// reset menu state when execing config\n"
+	@"touch_setclientonly 0\n"
+	@"\n"
+	@"// touch buttons\n"
+	@"touch_removeall\n"
+	@"touch_aspectratio 0.459954\n"
+	@"touch_addbutton \"look\" \"\" \"_look\" 0.5 0 1 1 255 255 255 255 0\n"
+	@"touch_addbutton \"move\" \"\" \"_move\" 0 0 0.5 1 255 255 255 255 0\n"
+	@"touch_addbutton \"loadquick\" \"touch_default/load\" \"loadquick\" 0.76 0 0.84 0.181818 255 255 255 255 16\n"
+	@"touch_addbutton \"savequick\" \"touch_default/save\" \"savequick\" 0.84 0 0.92 0.181818 255 255 255 255 16\n"
+	@"touch_addbutton \"messagemode\" \"touch_default/keyboard\" \"messagemode\" 0.84 0 0.92 0.181818 255 255 255 255 8\n"
+	@"touch_addbutton \"flashlight\" \"touch_default/flash_light_filled\" \"impulse 100\" 0.92 0 1 0.181818 255 255 255 255 0\n"
+	@"touch_addbutton \"scores\" \"touch_default/map\" \"+showscores\" 0.76 0 0.84 0.181818 255 255 255 255 8\n"
+	@"touch_addbutton \"show_numbers\" \"touch_default/show_weapons\" \"exec touch_default/numbers.cfg\" 0.44 0.818182 0.52 1 255 255 255 255 0\n"
+	@"touch_addbutton \"menu\" \"touch_default/menu\" \"cancelselect\" 0 0.818182 0.08 1 255 255 255 255 0\n"
+	@"touch_addbutton \"voicechat\" \"touch_default/microphone\" \"+voicerecord\" 0.78 0.818182 0.86 1 255 255 255 255 8\n"
+	@"touch_addbutton \"tduck\" \"touch_default/tduck\" \";+duck\" 0.7 0.84 0.76 1 255 255 255 255 0\n"
+	@"touch_addbutton \"duck\" \"touch_default/crouch\" \"+duck\" 0.92 0.8 1 1 255 255 255 255 0\n"
+	@"touch_addbutton \"jump\" \"touch_default/jump\" \"+jump\" 0.92 0.2 1 0.32 255 255 255 255 0\n"
+	@"touch_addbutton \"reload\" \"touch_default/reload\" \"+reload\" 0.3 0.04 0.38 0.24 255 255 255 255 0\n"
+	@"touch_addbutton \"attack\" \"touch_default/shoot\" \"+attack\" 0.04 0.24 0.18 0.52 255 255 255 255 0\n"
+	@"touch_addbutton \"attack2\" \"touch_default/shoot_alt\" \"+attack2\" 0.18 0.16 0.3 0.4 255 255 255 255 0\n"
+	@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.82 0.2 0.92 0.44 255 160 0 200 0\n"
+	@"touch_addbutton \"spray\" \"touch_default/spray\" \"impulse 201\" 0.68 0 0.76 0.2 255 255 255 255 8\n"
+	@"touch_addbutton \"guardar\" \"touch_default/show_weapons\" \"impulse 200\" 0.82 0.84 0.9 1 120 200 255 200 0\n"
+	@"touch_addbutton \"use\" \"touch_default/use\" \"+use\" 0 0.16 0.06 0.28 255 255 255 255 0\n"
+	@"touch_addbutton \"invprev\" \"touch_default/prev_weap\" \"invprev\" 0.5 0 0.54 0.08 255 255 255 255 1\n"
+	@"touch_addbutton \"invnext\" \"touch_default/next_weap\" \"invnext\" 0.54 0 0.58 0.08 255 255 255 255 1\n"
+	@"touch_addbutton \"edit\" \"touch_default/settings\" \"touch_enableedit\" 0.42 0 0.5 0.2 255 255 255 255 32\n"
+	@"touch_addbutton \"num1\" \"touch_default/key_1\" \"slot1\" 0.02 0 0.06 0.12 255 255 255 200 0\n"
+	@"touch_addbutton \"num2\" \"touch_default/key_2\" \"slot2\" 0.06 0 0.1 0.12 255 255 255 200 0\n"
+	@"touch_addbutton \"num3\" \"touch_default/key_3\" \"slot3\" 0.1 0 0.14 0.12 255 255 255 200 0\n"
+	@"touch_addbutton \"num4\" \"touch_default/key_4\" \"slot4\" 0.14 0 0.18 0.12 255 255 255 200 0\n"
+	@"touch_addbutton \"num5\" \"touch_default/key_5\" \"slot5\" 0.18 0 0.22 0.12 255 255 255 200 0\n"
+	@"touch_addbutton \"console\" \"touch_default/keyboard\" \"toggleconsole\" 0.612 0 0.668 0.12 255 255 255 200 0 1\n";
+
+// botões de ajustar a posição e o campo de visão da arma na mão (ajustar_arma, patch 0004 do motor):
+// um botão mostra e esconde o bloco; o bloco começa escondido (flag 1)
+static void HL_BotoesAjuste( NSMutableArray *nomes, NSMutableArray *botoes )
+{
+	static const struct { const char *nome, *texto, *comando; float x, y; } b[] =
+	{
+		{ "ajarma_perto",  "PERTO",  "ajustar_arma frente -0.5", 0.38f, 0.26f },
+		{ "ajarma_subir",  "SUBIR",  "ajustar_arma altura 0.5",  0.46f, 0.26f },
+		{ "ajarma_longe",  "LONGE",  "ajustar_arma frente 0.5",  0.54f, 0.26f },
+		{ "ajarma_esq",    "ESQ.",   "ajustar_arma lado -0.5",   0.38f, 0.36f },
+		{ "ajarma_zerar",  "ZERAR",  "ajustar_arma zerar",       0.46f, 0.36f },
+		{ "ajarma_dir",    "DIR.",   "ajustar_arma lado 0.5",    0.54f, 0.36f },
+		{ "ajarma_fovmenos", "FOV -", "ajustar_arma fov -2",     0.38f, 0.46f },
+		{ "ajarma_descer", "DESCER", "ajustar_arma altura -0.5", 0.46f, 0.46f },
+		{ "ajarma_fovmais", "FOV +", "ajustar_arma fov 2",       0.54f, 0.46f },
+	};
+	int i;
+
+	[nomes addObject:@"ajustararma"];
+	[botoes addObject:@"touch_addbutton \"ajustararma\" \"#AJUSTAR;ARMA\" \"ajarma_alternar\" 0.68 0 0.76 0.12 255 160 0 255 0 1\n"];
+
+	for( i = 0; i < (int)( sizeof( b ) / sizeof( b[0] )); i++ )
+	{
+		[nomes addObject:HL_Texto( b[i].nome )];
+		[botoes addObject:[NSString stringWithFormat:@"touch_addbutton \"%s\" \"#%s\" \"%s\" %.2f %.2f %.2f %.2f 255 200 80 255 1 1\n",
+			b[i].nome, b[i].texto, b[i].comando, b[i].x, b[i].y, b[i].x + 0.08f, b[i].y + 0.10f]];
+	}
+}
+
+// posição (x1 y1 x2 y2) de um botão num touch.cfg; NO se não tem
+static BOOL HL_PosicaoBotao( NSString *cfg, NSString *nome, float pos[4] )
+{
+	NSString *inicio = [NSString stringWithFormat:@"touch_addbutton \"%@\"", nome];
+
+	for( NSString *l in [cfg componentsSeparatedByString:@"\n"] )
+	{
+		NSString *limpa = [l stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		NSMutableArray *partes = [NSMutableArray array];
+		int i;
+
+		if( ![limpa hasPrefix:inicio] )
+			continue;
+
+		// touch_addbutton nome textura comando x1 y1 x2 y2 ... (nome, textura e comando sem espaços nos números)
+		for( NSString *t in [limpa componentsSeparatedByString:@"\""] )
+			[partes addObject:t];
+
+		// depois das três aspas fechadas vêm os números
+		if( [partes count] < 7 )
+			return NO;
+
+		{
+			NSMutableArray *nums = [NSMutableArray array];
+
+			for( NSString *t in [[partes lastObject] componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] )
+			{
+				if( [t length] > 0 )
+					[nums addObject:t];
+			}
+
+			if( [nums count] < 4 )
+				return NO;
+
+			for( i = 0; i < 4; i++ )
+				pos[i] = [[nums objectAtIndex:(NSUInteger)i] floatValue];
+		}
+		return YES;
+	}
+
+	return NO;
+}
+
+// grava o touch_padrao.cfg do jogo (só HL, OF e BS), com os botões que faltam no layout para cada um
+static void HL_GravarPadrao( const char *pasta )
+{
+	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
+	NSMutableString *cfg = [NSMutableString stringWithString:@"// gerado pelo app: o padrão dos botões (Reset no menu Touch)\n"];
+	NSMutableArray *nomes = [NSMutableArray array], *botoes = [NSMutableArray array];
+
+	[cfg appendString:s_touchPadrao];
+
+	// o OF tem 7 grupos de armas: o 6 e o 7 logo depois do 5
+	if( !strcmp( pasta, "gearbox" ))
+	{
+		[cfg appendString:@"touch_addbutton \"num6\" \"touch_default/key_6\" \"slot6\" 0.22 0 0.26 0.12 255 255 255 200 0\n"];
+		[cfg appendString:@"touch_addbutton \"num7\" \"touch_default/key_7\" \"slot7\" 0.26 0 0.3 0.12 255 255 255 200 0\n"];
+	}
+
+	HL_BotoesAjuste( nomes, botoes );
+
+	for( NSString *b in botoes )
+		[cfg appendString:b];
+
+	[cfg writeToFile:[dir stringByAppendingPathComponent:@"touch_padrao.cfg"] atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+}
+
 // botões de toque do app: pulo longo (agachar + pular) em todos os jogos e, no HL, no OF e no BS,
 // guardar e sacar a arma (impulse 200, patch jogos/*/0003-guardar-arma.patch)
 static void HL_PrepararPuloLongo( const char *pasta )
@@ -201,6 +371,22 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	NSMutableArray *nomes = [NSMutableArray arrayWithObject:@"pulolongo"];
 	NSMutableArray *botoes = [NSMutableArray arrayWithObject:
 		@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n"];
+	NSString *atual = nil;
+	float num5[4];
+	BOOL temNum5 = NO;
+
+	if( [fm fileExistsAtPath:touch] )
+	{
+		atual = [NSString stringWithContentsOfFile:touch encoding:NSUTF8StringEncoding error:NULL];
+		if( atual == nil )
+			atual = [NSString stringWithContentsOfFile:touch encoding:NSISOLatin1StringEncoding error:NULL];
+	}
+
+	if( atual != nil )
+		temNum5 = HL_PosicaoBotao( atual, @"num5", num5 );
+
+	if( ehHL )
+		HL_GravarPadrao( pasta );
 
 	// console, no alto da tela, entre os números das armas e o botão de guardar
 	[nomes addObject:@"console"];
@@ -212,28 +398,42 @@ static void HL_PrepararPuloLongo( const char *pasta )
 		[nomes addObject:@"guardar"];
 		[botoes addObject:@"touch_addbutton \"guardar\" \"touch_default/show_weapons\" \"impulse 200\" 0.68 0.00 0.76 0.142 120 200 255 200 0 1\n"];
 
-		// números das armas fixos no alto: 5 grupos no HL e no BS, 7 no OF (os dois a mais ficam entre o
-		// botão de editar e o de guardar)
+		// números das armas fixos no alto: 5 grupos no HL e no BS, 7 no OF (o 6 e o 7 logo depois do 5,
+		// onde quer que ele esteja no touch.cfg)
 		{
 			const int grupos = !strcmp( pasta, "gearbox" ) ? 7 : 5;
 			int n;
 
 			for( n = 1; n <= grupos; n++ )
 			{
-				const float x = ( n <= 5 ) ? 0.130f + 0.056f * ( n - 1 ) : 0.500f + 0.056f * ( n - 6 );
+				float x = 0.130f + 0.056f * ( n - 1 ), y1 = 0.0f, y2 = 0.12f, w = 0.056f;
+
+				if( n > 5 && temNum5 )
+				{
+					w = num5[2] - num5[0];
+					x = num5[2] + w * ( n - 6 );
+					y1 = num5[1];
+					y2 = num5[3];
+				}
 
 				[nomes addObject:[NSString stringWithFormat:@"num%d", n]];
 				[botoes addObject:[NSString stringWithFormat:
-					@"touch_addbutton \"num%d\" \"touch_default/key_%d\" \"slot%d\" %.3f 0 %.3f 0.12 255 255 255 200 0 1\n",
-					n, n, n, x, x + 0.056f]];
+					@"touch_addbutton \"num%d\" \"touch_default/key_%d\" \"slot%d\" %.3f %.3f %.3f %.3f 255 255 255 200 0 1\n",
+					n, n, n, x, y1, x + w, y2]];
 			}
 		}
+
+		// ajustar a posição e o campo de visão da arma na mão
+		HL_BotoesAjuste( nomes, botoes );
 	}
 	NSMutableString *cfg = [NSMutableString stringWithString:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
 		@"alias +pulolongo \"+duck;+jump\"\n"
-		@"alias -pulolongo \"-jump;-duck\"\n"];
+		@"alias -pulolongo \"-jump;-duck\"\n"
+		@"// o botão AJUSTAR ARMA mostra e esconde os botões de ajuste\n"
+		@"alias ajarma_mostrar \"touch_show ajarma_*; alias ajarma_alternar ajarma_esconder\"\n"
+		@"alias ajarma_esconder \"touch_hide ajarma_*; alias ajarma_alternar ajarma_mostrar\"\n"
+		@"alias ajarma_alternar ajarma_mostrar\n"];
 	NSMutableString *faltando = [NSMutableString string];
-	NSString *atual;
 	NSUInteger i;
 
 	for( i = 0; i < [nomes count]; i++ )
@@ -244,13 +444,6 @@ static void HL_PrepararPuloLongo( const char *pasta )
 
 	// o motor carrega o touch.cfg por cima no começo da partida: o botão precisa estar nele também
 	// (só acrescenta se não estiver, para não desfazer uma posição que você mudou no editor)
-	if( ![fm fileExistsAtPath:touch] )
-		return;
-
-	atual = [NSString stringWithContentsOfFile:touch encoding:NSUTF8StringEncoding error:NULL];
-	if( atual == nil )
-		atual = [NSString stringWithContentsOfFile:touch encoding:NSISOLatin1StringEncoding error:NULL];
-
 	if( atual == nil )
 		return;
 
@@ -396,27 +589,36 @@ static NSString *HL_CvarDoJogo( const char *pasta, NSString *cvar )
 	return nil;
 }
 
-// o save mais novo do jogo (os de nome, os automáticos e o rápido), sem o .sav; nil se não tem nenhum
+// o save mais novo do jogo (os de nome, os automáticos e o rápido), sem o .sav; nil se não tem nenhum.
+// A pasta pode ser "save" ou "SAVE" (a da Steam): o motor acha as duas, e aqui o nome tem que bater
 static NSString *HL_UltimoSave( const char *pasta )
 {
-	NSString *dir = [[HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )] stringByAppendingPathComponent:@"save"];
+	NSString *jogo = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSString *melhor = nil;
 	NSDate *quando = nil;
 
-	for( NSString *nome in [fm contentsOfDirectoryAtPath:dir error:NULL] )
+	for( NSString *sub in [fm contentsOfDirectoryAtPath:jogo error:NULL] )
 	{
-		NSDate *d;
+		NSString *dir = [jogo stringByAppendingPathComponent:sub];
 
-		if( ![[[nome pathExtension] lowercaseString] isEqualToString:@"sav"] )
+		if( ![[sub lowercaseString] isEqualToString:@"save"] )
 			continue;
 
-		d = [[fm attributesOfItemAtPath:[dir stringByAppendingPathComponent:nome] error:NULL] fileModificationDate];
-
-		if( d != nil && ( quando == nil || [d compare:quando] == NSOrderedDescending ))
+		for( NSString *nome in [fm contentsOfDirectoryAtPath:dir error:NULL] )
 		{
-			quando = d;
-			melhor = [nome stringByDeletingPathExtension];
+			NSDate *d;
+
+			if( ![[[nome pathExtension] lowercaseString] isEqualToString:@"sav"] )
+				continue;
+
+			d = [[fm attributesOfItemAtPath:[dir stringByAppendingPathComponent:nome] error:NULL] fileModificationDate];
+
+			if( d != nil && ( quando == nil || [d compare:quando] == NSOrderedDescending ))
+			{
+				quando = d;
+				melhor = [nome stringByDeletingPathExtension];
+			}
 		}
 	}
 
@@ -511,12 +713,17 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	{
 		NSString *save = HL_UltimoSave( jogo->pasta );
 
+		// o echo deixa no engine.log o que o app decidiu
+		[a addObject:@"+echo"];
+
 		if( save != nil )
 		{
+			[a addObject:[NSString stringWithFormat:@"hlios: abrindo o ultimo save, %@", save]];
 			[a addObject:@"+load"];
-			[a addObject:[save rangeOfString:@" "].location != NSNotFound ?
-				[NSString stringWithFormat:@"\"%@\"", save] : save];
+			[a addObject:save]; // com espaço, o motor põe as aspas sozinho
 		}
+		else
+			[a addObject:@"hlios: nenhum save na pasta save do jogo"];
 	}
 
 	s_argc = (int)[a count];
@@ -561,9 +768,11 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	UILabel *rotuloFov, *rotuloFovArmas, *notaFov;
 	UISwitch *chaveSave;
 	UIButton *botaoExtras;
+	UIButton *botaoCopiar;
 }
 - (void)recarregar;
 - (void)lerFovDoJogo;
+- (void)fazerCopiaBotoes;
 @end
 
 @implementation HLTela
@@ -681,6 +890,20 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	[botaoExtras addTarget:self action:@selector(editarExtras:) forControlEvents:UIControlEventTouchUpInside];
 	[self atualizarBotaoExtras];
 
+	// copia o touch.cfg do HL para o OF e o BS (pergunta antes)
+	{
+		UIButtonConfiguration *c = HL_EstiloBotao( NO );
+
+		c.title = @"Usar os botões do Half-Life no OF e no BS";
+		c.subtitle = @"Os de agora ficam guardados como touch-antigo.cfg";
+		c.titleAlignment = UIButtonConfigurationTitleAlignmentLeading;
+		c.contentInsets = NSDirectionalEdgeInsetsMake( 8, 14, 8, 14 );
+		c.cornerStyle = UIButtonConfigurationCornerStyleLarge;
+		botaoCopiar = [UIButton buttonWithConfiguration:c primaryAction:nil];
+		botaoCopiar.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+		[botaoCopiar addTarget:self action:@selector(copiarBotoes:) forControlEvents:UIControlEventTouchUpInside];
+	}
+
 	ajuda = [self rotulo:@"Arquivos › No Meu iPhone › Half-Life: copie para lá as pastas valve, gearbox e bshift "
 		@"(e cstrike e dmc, se quiser) da sua instalação da Steam. Para trocar de jogo, saia pelo menu do jogo e "
 		@"abra o app de novo."
@@ -698,7 +921,7 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		rotuloMira, escolhaMira,
 		rotuloFov, barraFov,
 		rotuloFovArmas, barraFovArmas, notaFov,
-		botaoExtras, ajuda
+		botaoExtras, botaoCopiar, ajuda
 	]];
 	direita.axis = UILayoutConstraintAxisVertical;
 	direita.spacing = 8;
@@ -950,6 +1173,79 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	}]];
 
 	[self presentViewController:janela animated:YES completion:nil];
+}
+
+- (void)avisar:(NSString *)titulo texto:(NSString *)texto
+{
+	UIAlertController *janela = [UIAlertController alertControllerWithTitle:titulo message:texto
+		preferredStyle:UIAlertControllerStyleAlert];
+
+	[janela addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+	[self presentViewController:janela animated:YES completion:nil];
+}
+
+- (void)copiarBotoes:(UIButton *)b
+{
+	UIAlertController *janela = [UIAlertController alertControllerWithTitle:@"Usar os botões do Half-Life?"
+		message:@"Os botões do Opposing Force e do Blue Shift ficam iguais aos do Half-Life (o OF ganha o 6 e o 7 "
+		@"ao lado do 5). Os de agora ficam guardados como touch-antigo.cfg na pasta de cada jogo."
+		preferredStyle:UIAlertControllerStyleAlert];
+
+	(void)b;
+
+	[janela addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Copiar" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
+		(void)acao;
+		[self fazerCopiaBotoes];
+	}]];
+
+	[self presentViewController:janela animated:YES completion:nil];
+}
+
+- (void)fazerCopiaBotoes
+{
+	static const char *destinos[] = { "gearbox", "bshift" };
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *origem = [[HL_Docs() stringByAppendingPathComponent:@"valve"] stringByAppendingPathComponent:@"touch.cfg"];
+	NSMutableArray *feitos = [NSMutableArray array];
+	int i;
+
+	if( ![fm fileExistsAtPath:origem] )
+	{
+		[self avisar:@"Nada para copiar" texto:@"O Half-Life ainda não tem touch.cfg. Abra o HL uma vez e saia pelo Quit."];
+		return;
+	}
+
+	for( i = 0; i < 2; i++ )
+	{
+		NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( destinos[i] )];
+		NSString *destino = [dir stringByAppendingPathComponent:@"touch.cfg"];
+
+		if( !HL_TemPasta( destinos[i] ))
+			continue;
+
+		// guarda o de agora sem apagar um guardado antes: touch-antigo.cfg, touch-antigo-2.cfg...
+		if( [fm fileExistsAtPath:destino] )
+		{
+			NSString *antigo = [dir stringByAppendingPathComponent:@"touch-antigo.cfg"];
+			int n = 2;
+
+			while( [fm fileExistsAtPath:antigo] )
+				antigo = [dir stringByAppendingPathComponent:[NSString stringWithFormat:@"touch-antigo-%d.cfg", n++]];
+
+			if( ![fm moveItemAtPath:destino toPath:antigo error:NULL] )
+				continue;
+		}
+
+		if( [fm copyItemAtPath:origem toPath:destino error:NULL] )
+			[feitos addObject:!strcmp( destinos[i], "gearbox" ) ? @"Opposing Force" : @"Blue Shift"];
+	}
+
+	if( [feitos count] == 0 )
+		[self avisar:@"Não copiou" texto:@"Não achei as pastas gearbox e bshift, ou não deu para gravar nelas."];
+	else
+		[self avisar:@"Pronto" texto:[NSString stringWithFormat:@"Os botões do Half-Life agora valem no %@.",
+			[feitos componentsJoinedByString:@" e no "]]];
 }
 
 - (void)jogar:(UIButton *)b
