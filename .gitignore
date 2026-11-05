@@ -29,6 +29,13 @@ dmc/
 .env
 .env.*
 
+# mods de terceiros baixados para avaliar (não vão para o GitHub)
+mods-para-avaliar/
+*.rar
+*.7z
+*.wav
+*.spr
+
 # pastas de entrega
 PARA-A-PASTA-*/
 _subir/

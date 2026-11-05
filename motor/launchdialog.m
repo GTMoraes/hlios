@@ -77,6 +77,9 @@ static NSUserDefaults *HL_Prefs( void )
 		@"hl.olharatira": @YES,
 		@"hl.som": @YES,
 		@"hl.diagnostico": @YES,
+		@"hl.hd": @YES,
+		@"hl.addon": @YES,
+		@"hl.mira": @2,
 		@"hl.extras": @"",
 		@"hl.jogo": @"valve"
 	}];
@@ -266,6 +269,39 @@ static void HL_Juntar( NSMutableArray *lista, NSString *texto )
 	}
 }
 
+// o motor lê as pastas extras (_hd e _addon) do vfs.cfg do jogo logo que abre, antes dos argumentos;
+// gravar aqui faz a opção valer já nesta abertura (o motor regrava o arquivo ao sair)
+static void HL_PrepararVFS( const char *pasta )
+{
+	NSUserDefaults *p = HL_Prefs();
+	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
+	NSString *cfg = [dir stringByAppendingPathComponent:@"vfs.cfg"];
+	NSString *atual = [NSString stringWithContentsOfFile:cfg encoding:NSUTF8StringEncoding error:NULL];
+	NSMutableArray *linhas = [NSMutableArray array];
+
+	if( atual == nil )
+		atual = [NSString stringWithContentsOfFile:cfg encoding:NSISOLatin1StringEncoding error:NULL];
+
+	if( atual != nil )
+	{
+		for( NSString *l in [atual componentsSeparatedByString:@"\n"] )
+		{
+			NSString *limpa = [l stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+			if( [limpa length] == 0 || [limpa hasPrefix:@"fs_mount_hd"] || [limpa hasPrefix:@"fs_mount_addon"] )
+				continue;
+
+			[linhas addObject:limpa];
+		}
+	}
+
+	[linhas addObject:[NSString stringWithFormat:@"fs_mount_hd \"%d\"", [p boolForKey:@"hl.hd"] ? 1 : 0]];
+	[linhas addObject:[NSString stringWithFormat:@"fs_mount_addon \"%d\"", [p boolForKey:@"hl.addon"] ? 1 : 0]];
+
+	[[[linhas componentsJoinedByString:@"\n"] stringByAppendingString:@"\n"]
+		writeToFile:cfg atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+}
+
 static void HL_MontarArgs( const hl_jogo_t *jogo )
 {
 	NSUserDefaults *p = HL_Prefs();
@@ -296,6 +332,16 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	// toque rápido na área de olhar atira; toque duplo e segurar atira sem parar (patch 0003 do motor)
 	[a addObject:@"+touch_look_fire"];
 	[a addObject:[p boolForKey:@"hl.olharatira"] ? @"1" : @"0"];
+
+	// mira assistida (patch jogos/*/0001-mira-assistida.patch): só no HL, no OF e no BS
+	if( !strcmp( jogo->pasta, "valve" ) || !strcmp( jogo->pasta, "gearbox" ) || !strcmp( jogo->pasta, "bshift" ))
+	{
+		[a addObject:@"+sv_aim_assist"];
+		[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.mira"]]];
+	}
+
+	// modelos HD e conteúdo extra (veja HL_PrepararVFS)
+	HL_PrepararVFS( jogo->pasta );
 
 	// pulo longo (veja HL_PrepararPuloLongo)
 	HL_PrepararPuloLongo( jogo->pasta );
@@ -332,14 +378,17 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	return c;
 }
 
-@interface HLTela : UIViewController <UITextFieldDelegate>
+@interface HLTela : UIViewController
 {
 	UIStackView *listaJogos;
 	UISwitch *chaveGiro;
 	UISwitch *chaveTiro;
 	UISwitch *chaveSom;
 	UISwitch *chaveDiag;
-	UITextField *campoExtras;
+	UISwitch *chaveHD;
+	UISwitch *chaveAddon;
+	UISegmentedControl *escolhaMira;
+	UIButton *botaoExtras;
 }
 - (void)recarregar;
 @end
@@ -404,7 +453,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	NSString *versao = [NSString stringWithFormat:@"versão %@ (build %@)",
 		[info objectForKey:@"CFBundleShortVersionString"], [info objectForKey:@"CFBundleVersion"]];
 	UIStackView *esquerda, *direita, *colunas;
-	UILabel *titulo, *subtitulo, *escolha, *ajuda;
+	UILabel *titulo, *subtitulo, *escolha, *ajuda, *rotuloMira;
+	UIScrollView *rolagem;
 	UILayoutGuide *area;
 
 	[super viewDidLoad];
@@ -427,16 +477,22 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	chaveTiro = [self chave:@"hl.olharatira"];
 	chaveSom = [self chave:@"hl.som"];
 	chaveDiag = [self chave:@"hl.diagnostico"];
+	chaveHD = [self chave:@"hl.hd"];
+	chaveAddon = [self chave:@"hl.addon"];
 
-	campoExtras = [[UITextField alloc] init];
-	campoExtras.borderStyle = UITextBorderStyleRoundedRect;
-	campoExtras.placeholder = @"Argumentos extras (avançado)";
-	campoExtras.text = [HL_Prefs() stringForKey:@"hl.extras"];
-	campoExtras.autocapitalizationType = UITextAutocapitalizationTypeNone;
-	campoExtras.autocorrectionType = UITextAutocorrectionTypeNo;
-	campoExtras.returnKeyType = UIReturnKeyDone;
-	campoExtras.clearButtonMode = UITextFieldViewModeWhileEditing;
-	campoExtras.delegate = self;
+	// mira assistida: 0 desligada, 1 normal (a do jogo, também no Difícil), 2 forte, 3 muito forte
+	rotuloMira = [self rotulo:@"Mira assistida (vale também no Difícil)" tamanho:15 peso:UIFontWeightRegular
+		cor:[UIColor whiteColor]];
+	escolhaMira = [[UISegmentedControl alloc] initWithItems:@[ @"Desligada", @"Normal", @"Forte", @"Muito forte" ]];
+	escolhaMira.selectedSegmentIndex = (NSInteger)[HL_Prefs() integerForKey:@"hl.mira"];
+	escolhaMira.selectedSegmentTintColor = HL_Laranja();
+	[escolhaMira addTarget:self action:@selector(mudouMira:) forControlEvents:UIControlEventValueChanged];
+
+	// argumentos extras: abrem numa janelinha, que o iPhone põe acima do teclado
+	botaoExtras = [UIButton buttonWithConfiguration:HL_EstiloBotao( NO ) primaryAction:nil];
+	botaoExtras.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
+	[botaoExtras addTarget:self action:@selector(editarExtras:) forControlEvents:UIControlEventTouchUpInside];
+	[self atualizarBotaoExtras];
 
 	ajuda = [self rotulo:@"Arquivos › No Meu iPhone › Half-Life: copie para lá as pastas valve, gearbox e bshift "
 		@"(e cstrike e dmc, se quiser) da sua instalação da Steam. Para trocar de jogo, saia pelo menu do jogo e "
@@ -449,13 +505,32 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[self linha:@"Toque no olhar atira" chave:chaveTiro],
 		[self linha:@"Som no modo silencioso" chave:chaveSom],
 		[self linha:@"Log detalhado (diagnóstico)" chave:chaveDiag],
-		campoExtras, ajuda
+		[self linha:@"Modelos HD" chave:chaveHD],
+		[self linha:@"Conteúdo extra (pastas _addon)" chave:chaveAddon],
+		rotuloMira, escolhaMira,
+		botaoExtras, ajuda
 	]];
 	direita.axis = UILayoutConstraintAxisVertical;
 	direita.spacing = 8;
+	direita.translatesAutoresizingMaskIntoConstraints = NO;
 	[direita setCustomSpacing:12 afterView:subtitulo];
+	[direita setCustomSpacing:6 afterView:rotuloMira];
+	[direita setCustomSpacing:12 afterView:escolhaMira];
 
-	colunas = [[UIStackView alloc] initWithArrangedSubviews:@[ esquerda, direita ]];
+	// a coluna da direita rola, para caber em qualquer iPhone
+	rolagem = [[UIScrollView alloc] init];
+	rolagem.showsHorizontalScrollIndicator = NO;
+	rolagem.alwaysBounceVertical = NO;
+	[rolagem addSubview:direita];
+	[NSLayoutConstraint activateConstraints:@[
+		[direita.topAnchor constraintEqualToAnchor:rolagem.contentLayoutGuide.topAnchor],
+		[direita.bottomAnchor constraintEqualToAnchor:rolagem.contentLayoutGuide.bottomAnchor],
+		[direita.leadingAnchor constraintEqualToAnchor:rolagem.contentLayoutGuide.leadingAnchor],
+		[direita.trailingAnchor constraintEqualToAnchor:rolagem.contentLayoutGuide.trailingAnchor],
+		[direita.widthAnchor constraintEqualToAnchor:rolagem.frameLayoutGuide.widthAnchor]
+	]];
+
+	colunas = [[UIStackView alloc] initWithArrangedSubviews:@[ esquerda, rolagem ]];
 	colunas.axis = UILayoutConstraintAxisHorizontal;
 	colunas.alignment = UIStackViewAlignmentTop;
 	colunas.distribution = UIStackViewDistributionFillEqually;
@@ -468,7 +543,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[colunas.topAnchor constraintEqualToAnchor:area.topAnchor constant:16],
 		[colunas.leadingAnchor constraintEqualToAnchor:area.leadingAnchor constant:20],
 		[colunas.trailingAnchor constraintEqualToAnchor:area.trailingAnchor constant:-20],
-		[colunas.bottomAnchor constraintLessThanOrEqualToAnchor:area.bottomAnchor constant:-8]
+		[colunas.bottomAnchor constraintLessThanOrEqualToAnchor:area.bottomAnchor constant:-8],
+		[rolagem.heightAnchor constraintEqualToAnchor:area.heightAnchor constant:-24]
 	]];
 
 	[self recarregar];
@@ -545,12 +621,53 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[p setBool:s.on forKey:@"hl.som"];
 	else if( s == chaveDiag )
 		[p setBool:s.on forKey:@"hl.diagnostico"];
+	else if( s == chaveHD )
+		[p setBool:s.on forKey:@"hl.hd"];
+	else if( s == chaveAddon )
+		[p setBool:s.on forKey:@"hl.addon"];
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)campo
+- (void)mudouMira:(UISegmentedControl *)c
 {
-	[campo resignFirstResponder];
-	return YES;
+	[HL_Prefs() setInteger:c.selectedSegmentIndex forKey:@"hl.mira"];
+}
+
+- (void)atualizarBotaoExtras
+{
+	NSString *texto = [HL_Prefs() stringForKey:@"hl.extras"];
+	UIButtonConfiguration *c = HL_EstiloBotao( NO );
+
+	c.title = @"Argumentos extras";
+	c.subtitle = [texto length] > 0 ? texto : @"nenhum (toque para escrever)";
+	c.titleAlignment = UIButtonConfigurationTitleAlignmentLeading;
+	c.contentInsets = NSDirectionalEdgeInsetsMake( 8, 14, 8, 14 );
+	c.cornerStyle = UIButtonConfigurationCornerStyleLarge;
+	botaoExtras.configuration = c;
+}
+
+- (void)editarExtras:(UIButton *)b
+{
+	__block UIAlertController *janela = [UIAlertController alertControllerWithTitle:@"Argumentos extras"
+		message:@"Vão no fim da linha de comando do jogo. Ex.: +sv_cheats 1" preferredStyle:UIAlertControllerStyleAlert];
+
+	[janela addTextFieldWithConfigurationHandler:^( UITextField *t ) {
+		t.text = [HL_Prefs() stringForKey:@"hl.extras"];
+		t.autocapitalizationType = UITextAutocapitalizationTypeNone;
+		t.autocorrectionType = UITextAutocorrectionTypeNo;
+		t.spellCheckingType = UITextSpellCheckingTypeNo;
+		t.clearButtonMode = UITextFieldViewModeWhileEditing;
+	}];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:nil]];
+	[janela addAction:[UIAlertAction actionWithTitle:@"Salvar" style:UIAlertActionStyleDefault handler:^( UIAlertAction *acao ) {
+		NSString *texto = [[janela.textFields objectAtIndex:0] text];
+
+		(void)acao;
+
+		[HL_Prefs() setObject:( texto ? texto : @"" ) forKey:@"hl.extras"];
+		[self atualizarBotaoExtras];
+	}]];
+
+	[self presentViewController:janela animated:YES completion:nil];
 }
 
 - (void)jogar:(UIButton *)b
@@ -563,8 +680,6 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 
 	j = &s_jogos[b.tag];
 
-	[campoExtras resignFirstResponder];
-	[p setObject:( campoExtras.text ? campoExtras.text : @"" ) forKey:@"hl.extras"];
 	[p setObject:HL_Texto( j->pasta ) forKey:@"hl.jogo"];
 	[p synchronize];
 

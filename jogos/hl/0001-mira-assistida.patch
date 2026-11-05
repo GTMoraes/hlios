@@ -1,0 +1,113 @@
+diff --git a/dlls/game.cpp b/dlls/game.cpp
+index 5c4bb6c..17821cb 100644
+--- a/dlls/game.cpp
++++ b/dlls/game.cpp
+@@ -22,6 +22,8 @@ static cvar_t build_commit = { "sv_game_build_commit", g_VCSInfo_Commit };
+ static cvar_t build_branch = { "sv_game_build_branch", g_VCSInfo_Branch };
+ 
+ cvar_t displaysoundlist = {"displaysoundlist","0"};
++// hlios: mira assistida para controles de toque (0 = como o original; 1, 2, 3 = força, vale também no Difícil)
++cvar_t sv_aim_assist = { "sv_aim_assist", "0", FCVAR_SERVER };
+ 
+ // multiplayer server rules
+ cvar_t fragsleft	= { "mp_fragsleft","0", FCVAR_SERVER | FCVAR_UNLOGGED };	  // Don't spam console/log files/users with this changing
+@@ -488,6 +490,7 @@ void GameDLLInit( void )
+ 	CVAR_REGISTER( &build_branch );
+ 
+ 	CVAR_REGISTER( &displaysoundlist );
++	CVAR_REGISTER( &sv_aim_assist );
+ 	CVAR_REGISTER( &allow_spectators );
+ 
+ 	CVAR_REGISTER( &teamplay );
+diff --git a/dlls/game.h b/dlls/game.h
+index bb84490..2abcca0 100644
+--- a/dlls/game.h
++++ b/dlls/game.h
+@@ -19,6 +19,7 @@
+ extern void GameDLLInit( void );
+ 
+ extern cvar_t displaysoundlist;
++extern cvar_t sv_aim_assist;
+ 
+ // multiplayer server rules
+ extern cvar_t teamplay;
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index 5f70d6a..1f63df2 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -4346,7 +4346,12 @@ void CBasePlayer::EnableControl( BOOL fControl )
+ //=========================================================
+ Vector CBasePlayer::GetAutoaimVector( float flDelta )
+ {
+-	if( g_iSkillLevel == SKILL_HARD )
++	// hlios: sv_aim_assist 1, 2 ou 3 liga a mira assistida também no Difícil e multiplica o alcance dela
++	const float flAssist = Q_min( Q_max( sv_aim_assist.value, 0.0f ), 3.0f );
++
++	if( flAssist > 0.0f )
++		flDelta *= flAssist;
++	else if( g_iSkillLevel == SKILL_HARD )
+ 	{
+ 		UTIL_MakeVectors( pev->v_angle + pev->punchangle );
+ 		return gpGlobals->v_forward;
+@@ -4383,14 +4388,16 @@ Vector CBasePlayer::GetAutoaimVector( float flDelta )
+ 	if( angles.y < -180 )
+ 		angles.y += 360;
+ 
+-	if( angles.x > 25 )
+-		angles.x = 25;
+-	if( angles.x < -25 )
+-		angles.x = -25;
+-	if( angles.y > 12 )
+-		angles.y = 12;
+-	if( angles.y < -12 )
+-		angles.y = -12;
++	const float flMaxX = 25.0f * Q_max( flAssist, 1.0f ), flMaxY = 12.0f * Q_max( flAssist, 1.0f );
++
++	if( angles.x > flMaxX )
++		angles.x = flMaxX;
++	if( angles.x < -flMaxX )
++		angles.x = -flMaxX;
++	if( angles.y > flMaxY )
++		angles.y = flMaxY;
++	if( angles.y < -flMaxY )
++		angles.y = -flMaxY;
+ 
+ 	// always use non-sticky autoaim
+ 	// UNDONE: use sever variable to chose!
+@@ -4406,7 +4413,7 @@ Vector CBasePlayer::GetAutoaimVector( float flDelta )
+ 	// m_vecAutoAim = m_vecAutoAim * 0.99;
+ 
+ 	// Don't send across network if sv_aim is 0
+-	if( g_psv_aim->value && g_psv_allow_autoaim && g_psv_allow_autoaim->value )
++	if( flAssist > 0.0f || ( g_psv_aim->value && g_psv_allow_autoaim && g_psv_allow_autoaim->value ))
+ 	{
+ 		if( m_vecAutoAim.x != m_lastx || m_vecAutoAim.y != m_lasty )
+ 		{
+@@ -4432,7 +4439,8 @@ Vector CBasePlayer::AutoaimDeflection( Vector &vecSrc, float flDist, float flDel
+ 	edict_t *bestent;
+ 	TraceResult tr;
+ 
+-	if( !( g_psv_aim->value && g_psv_allow_autoaim && g_psv_allow_autoaim->value ))
++	// hlios: a mira assistida (sv_aim_assist) vale mesmo com sv_aim ou sv_allow_autoaim desligados
++	if( sv_aim_assist.value <= 0.0f && !( g_psv_aim->value && g_psv_allow_autoaim && g_psv_allow_autoaim->value ))
+ 	{
+ 		m_fOnTarget = FALSE;
+ 		return g_vecZero;
+diff --git a/dlls/singleplay_gamerules.cpp b/dlls/singleplay_gamerules.cpp
+index 93d1521..209e254 100644
+--- a/dlls/singleplay_gamerules.cpp
++++ b/dlls/singleplay_gamerules.cpp
+@@ -215,9 +215,12 @@ void CHalfLifeRules::PlayerSpawn( CBasePlayer *pPlayer )
+ 
+ //=========================================================
+ //=========================================================
++extern cvar_t sv_aim_assist;
++
+ BOOL CHalfLifeRules::AllowAutoTargetCrosshair( void )
+ {
+-	return ( g_iSkillLevel == SKILL_EASY );
++	// hlios: com a mira assistida ligada, a mira fica vermelha no alvo em qualquer dificuldade
++	return ( g_iSkillLevel == SKILL_EASY || sv_aim_assist.value > 0.0f );
+ }
+ 
+ //=========================================================

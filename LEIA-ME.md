@@ -39,6 +39,16 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 4. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
+### Mudanças nos jogos (`jogos/`)
+
+- **`hl/0001-mira-assistida.patch`** e **`opfor/0001-mira-assistida.patch`** (Half-Life e Blue Shift usam a
+  mesma biblioteca): criam a cvar `sv_aim_assist`. `0` é o jogo original. `1`, `2` e `3` ligam a mira
+  assistida também no Difícil (o original desliga nele), multiplicam o alcance dela por 1, 2 ou 3 (pistola e
+  Python: 10° no original; MP5 e escopeta: 5°) e pintam a mira de vermelho quando o tiro vai pegar num alvo.
+  Valem mesmo com `sv_aim` e `sv_allow_autoaim` desligados (no Xash o `sv_allow_autoaim` vem desligado).
+  Só muda a mira: dano, inimigos e munição do Difícil ficam iguais.
+- O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch` depois de baixar cada hlsdk.
+
 ### Mudança no Counter-Strike (`cs16/`)
 
 - **`0001-regamedll-filesystem-ios.patch`**: o servidor do CS (ReGameDLL) abre o `filesystem_stdio` por conta
@@ -74,7 +84,7 @@ Passos do workflow (`scripts/`):
 | `sdl2.sh` | compila o SDL2 para iPhone (fica em cache) |
 | `baixar-motor.sh` | baixa o Xash no commit fixado e aplica `motor/` |
 | `compilar-motor.sh` | `waf configure --enable-lto --ios`, `build` e `install` |
-| `compilar-jogos.sh` | hlsdk-portable: mobile_hacks, opfor e dmc (em Debug, como o script de iOS do Xash) |
+| `compilar-jogos.sh` | hlsdk-portable: mobile_hacks, opfor e dmc (em Debug, como o script de iOS do Xash), com `jogos/` |
 | `compilar-cs16.sh` | cs16-client (pode falhar sem parar a build) |
 | `montar-app.sh` | junta tudo, embrulha as bibliotecas, ícone, Info.plist, assinatura provisória e IPA |
 | `enviar-testflight.sh` | monta o `.xcarchive` e envia |
@@ -118,14 +128,20 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Som no modo silencioso**: o som toca mesmo com o iPhone no silencioso.
 - **Log detalhado (diagnóstico)**: `-dev 2`. Mais informação no `engine.log` e mensagens na tela no
   carregamento.
-- **Argumentos extras**: vão no fim da linha de comando. Ex.: `+fs_mount_hd 1` liga os modelos HD (vale a
-  partir da abertura seguinte).
+- **Modelos HD** e **Conteúdo extra (pastas _addon)**: `fs_mount_hd` e `fs_mount_addon`. O app grava os dois
+  no `vfs.cfg` do jogo antes de abrir, então valem já na mesma abertura. Ligados por padrão. As pastas
+  `<jogo>_addon` (por exemplo, armas trocadas) ficam ao lado de `valve`, `gearbox` e `bshift` e passam na
+  frente das `_hd` e das originais.
+- **Mira assistida**: Desligada, Normal, Forte (padrão) ou Muito forte, vira o `sv_aim_assist` 0 a 3 (só no
+  HL, no OF e no BS).
+- **Argumentos extras**: vão no fim da linha de comando, e vencem as opções acima. O botão abre uma janelinha
+  acima do teclado.
 - **Trocar de jogo**: Quit no menu do jogo (o app fecha) e abrir o app de novo (no iOS o motor não reinicia sozinho).
 - **Pulo longo**: todo jogo ganha um botão laranja de pulo (à esquerda das miras) que agacha e pula ao mesmo
   tempo (`+pulolongo`). O app grava `hlios.cfg` na pasta do jogo e acrescenta o botão ao `touch.cfg` se ele não
   estiver lá. Dá para mover e redimensionar no editor (engrenagem), e a posição fica. Até a 0.1.3 o botão
   saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +exec hlios.cfg`, e
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 

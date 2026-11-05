@@ -3,6 +3,7 @@
 #   mobile_hacks -> valve   (Half-Life; também serve o Blue Shift)
 #   opfor        -> gearbox (Opposing Force)
 #   dmc          -> dmc     (Deathmatch Classic)
+# patches do app em jogos/hl e jogos/opfor (mira assistida: sv_aim_assist)
 . "$(dirname "$0")/comum.sh"
 registrar jogos
 
@@ -13,6 +14,11 @@ mkdir -p "$LIBS"
 compilar_hlsdk() { # nome commit
 	local dir="$TRAB/hlsdk-$1"
 	baixar_repo https://github.com/FWGS/hlsdk-portable "$2" "$dir"
+	# mudanças do app no código do jogo (jogos/<nome>/*.patch), se houver
+	for p in "$RAIZ/jogos/$1"/*.patch; do
+		[ -e "$p" ] || continue
+		git -C "$dir" apply --verbose "$p"
+	done
 	# Debug, como no script de iOS do Xash (lá diz que o Release para iOS está quebrado)
 	cmake -S "$dir" -B "$dir/build" \
 		-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
