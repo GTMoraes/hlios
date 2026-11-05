@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
 
 // usadas pelo motor (engine/platform/platform.h, common/sys_con.c e client/identification.c)
 const char *IOS_GetDocsDir( void );
@@ -32,6 +33,7 @@ void IOS_LaunchDialog( void );
 int IOS_GetArgs( char ***out );
 char *IOS_GetUDID( void );
 void IOS_Log( const char *text );
+void IOS_Encerrar( int codigo ); // chamada pelo engine/common/launcher.c (patch 0002)
 
 typedef struct
 {
@@ -81,6 +83,8 @@ static NSUserDefaults *HL_Prefs( void )
 		@"hl.addon": @YES,
 		@"hl.mira": @2,
 		@"hl.toque": @1,
+		@"hl.fov": @90,
+		@"hl.fovarmas": @90,
 		@"hl.extras": @"",
 		@"hl.jogo": @"valve"
 	}];
@@ -194,6 +198,10 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	NSMutableArray *nomes = [NSMutableArray arrayWithObject:@"pulolongo"];
 	NSMutableArray *botoes = [NSMutableArray arrayWithObject:
 		@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n"];
+
+	// console, no alto da tela, entre os números das armas e o botão de guardar
+	[nomes addObject:@"console"];
+	[botoes addObject:@"touch_addbutton \"console\" \"touch_default/keyboard\" \"toggleconsole\" 0.612 0 0.668 0.12 255 255 255 200 0 1\n"];
 
 	if( ehHL )
 	{
@@ -367,6 +375,16 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	[a addObject:@"-log"];
 	[a addObject:@"engine.log"];
 
+	// console liberado (abre pelo botão de teclado no alto da tela)
+	[a addObject:@"-console"];
+
+	// campo de visão do mundo (default_fov, em 4:3; a tela larga só abre os lados) e o da arma em primeira
+	// pessoa (r_viewmodel_fov, patch 0004 do motor), na mesma escala
+	[a addObject:@"+default_fov"];
+	[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.fov"]]];
+	[a addObject:@"+r_viewmodel_fov"];
+	[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.fovarmas"]]];
+
 	if( [p boolForKey:@"hl.diagnostico"] )
 	{
 		[a addObject:@"-dev"];
@@ -451,6 +469,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	UISwitch *chaveHD;
 	UISwitch *chaveAddon;
 	UISegmentedControl *escolhaMira;
+	UISlider *barraFov, *barraFovArmas;
+	UILabel *rotuloFov, *rotuloFovArmas;
 	UIButton *botaoExtras;
 }
 - (void)recarregar;
@@ -548,6 +568,13 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	chaveHD = [self chave:@"hl.hd"];
 	chaveAddon = [self chave:@"hl.addon"];
 
+	// campo de visão (60 a 120; 90 é o original), do mundo e da arma em primeira pessoa
+	rotuloFov = [self rotulo:@"" tamanho:15 peso:UIFontWeightRegular cor:[UIColor whiteColor]];
+	rotuloFovArmas = [self rotulo:@"" tamanho:15 peso:UIFontWeightRegular cor:[UIColor whiteColor]];
+	barraFov = [self barra:@"hl.fov"];
+	barraFovArmas = [self barra:@"hl.fovarmas"];
+	[self atualizarFov];
+
 	// mira assistida: 0 desligada, 1 normal (a do jogo, também no Difícil), 2 forte, 3 muito forte
 	rotuloMira = [self rotulo:@"Mira assistida (vale também no Difícil)" tamanho:15 peso:UIFontWeightRegular
 		cor:[UIColor whiteColor]];
@@ -576,6 +603,8 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[self linha:@"Conteúdo extra (pastas _addon)" chave:chaveAddon],
 		rotuloToque, escolhaToque,
 		rotuloMira, escolhaMira,
+		rotuloFov, barraFov,
+		rotuloFovArmas, barraFovArmas,
 		botaoExtras, ajuda
 	]];
 	direita.axis = UILayoutConstraintAxisVertical;
@@ -586,6 +615,10 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 	[direita setCustomSpacing:12 afterView:escolhaToque];
 	[direita setCustomSpacing:6 afterView:rotuloMira];
 	[direita setCustomSpacing:12 afterView:escolhaMira];
+	[direita setCustomSpacing:2 afterView:rotuloFov];
+	[direita setCustomSpacing:10 afterView:barraFov];
+	[direita setCustomSpacing:2 afterView:rotuloFovArmas];
+	[direita setCustomSpacing:12 afterView:barraFovArmas];
 
 	// a coluna da direita rola, para caber em qualquer iPhone
 	rolagem = [[UIScrollView alloc] init];
@@ -693,6 +726,41 @@ static UIButtonConfiguration *HL_EstiloBotao( BOOL destaque )
 		[p setBool:s.on forKey:@"hl.hd"];
 	else if( s == chaveAddon )
 		[p setBool:s.on forKey:@"hl.addon"];
+}
+
+- (UISlider *)barra:(NSString *)chave
+{
+	UISlider *b = [[UISlider alloc] init];
+
+	b.minimumValue = 60;
+	b.maximumValue = 120;
+	b.value = (float)[HL_Prefs() integerForKey:chave];
+	b.minimumTrackTintColor = HL_Laranja();
+	[b addTarget:self action:@selector(mudouFov:) forControlEvents:UIControlEventValueChanged];
+
+	return b;
+}
+
+- (void)atualizarFov
+{
+	NSInteger fov = [HL_Prefs() integerForKey:@"hl.fov"], armas = [HL_Prefs() integerForKey:@"hl.fovarmas"];
+
+	rotuloFov.text = [NSString stringWithFormat:@"Campo de visão: %d%@", (int)fov, fov == 90 ? @" (original)" : @""];
+	rotuloFovArmas.text = [NSString stringWithFormat:@"Campo de visão das armas: %d%@", (int)armas,
+		armas == 90 ? @" (original)" : @""];
+}
+
+- (void)mudouFov:(UISlider *)b
+{
+	// de 1 em 1, e "gruda" no 90 (o original) quando passa perto
+	NSInteger v = (NSInteger)lroundf( b.value );
+
+	if( v >= 89 && v <= 91 )
+		v = 90;
+
+	b.value = (float)v;
+	[HL_Prefs() setInteger:v forKey:( b == barraFov ) ? @"hl.fov" : @"hl.fovarmas"];
+	[self atualizarFov];
 }
 
 - (void)mudouToque:(UISegmentedControl *)c
@@ -818,6 +886,27 @@ char *IOS_GetUDID( void )
 	udid[sizeof( udid ) - 1] = 0;
 
 	return udid;
+}
+
+// ao sair do jogo (Quit ou erro): o iPhone não tem um jeito público de um app ir para a tela inicial
+// sozinho, então usa o "suspend" do UIApplication (o mesmo efeito do botão de início), espera a animação
+// e fecha. Se ele não existir, fecha direto, como antes
+void IOS_Encerrar( int codigo )
+{
+	UIApplication *app = [UIApplication sharedApplication];
+	SEL voltar = NSSelectorFromString( [@"sus" stringByAppendingString:@"pend"] );
+
+	if( app != nil && [app respondsToSelector:voltar] )
+	{
+		NSDate *fim = [NSDate dateWithTimeIntervalSinceNow:1.0];
+
+		[app performSelector:voltar];
+
+		while( [fim timeIntervalSinceNow] > 0 )
+			[[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:fim];
+	}
+
+	exit( codigo );
 }
 
 void IOS_Log( const char *text )

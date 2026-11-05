@@ -30,7 +30,10 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    - Exemplo: `valve/cl_dlls/client_ios_arm64.dylib` vira `Frameworks/valve__cl_dlls__client_ios_arm64.framework`.
    - Jogo sem biblioteca própria usa a do `valve`. É assim que o Blue Shift roda (com `-dll @hl`).
 2. **`0002-ios-fechar-o-app-ao-sair.patch`**: no iOS, quando o motor termina (Quit ou travamento), o SDL deixa o
-   app aberto numa tela preta. O patch fecha o app; ao abrir de novo, volta a tela inicial.
+   app aberto numa tela preta. O patch chama `IOS_Encerrar` (no `launchdialog.m`), que manda o app para a tela
+   inicial do iPhone com a animação normal, pelo `suspend` do `UIApplication`, e fecha o app 1 s depois. O
+   `suspend` não é uma função pública da Apple: se o envio para o TestFlight for recusado por causa dele, é só
+   trocar por um `exit` direto. Ao abrir de novo, volta a tela de escolha.
 3. **`0003-ios-toque-no-olhar-atira.patch`**: cria a cvar `touch_look_fire`. Ligada, a área de olhar (lado
    direito) também atira: um toque rápido com o dedo quase parado dá um disparo da primária, e toque duplo e
    segurar (segundo toque até 0,3 s depois do primeiro) atira sem parar enquanto o dedo fica na tela, mirando
@@ -38,7 +41,10 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
    `touch_look_fire_move` (quanto o dedo pode andar, em fração da tela, padrão 0,005). Toque que cai num botão
    (pulo, agachar etc.) não conta como tiro. O disparo do toque rápido sai quando o dedo solta. Vale para
    todos os jogos.
-4. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+4. **`0004-ios-fov-das-armas.patch`**: cria a cvar `r_viewmodel_fov`, o campo de visão só da arma em primeira
+   pessoa, na mesma escala do `default_fov` (vale para 4:3, e a tela larga só abre os lados). `0` usa o mesmo
+   do mundo, como o original. A arma é desenhada com uma projeção própria e depois volta a do mundo.
+5. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
 ### Mudanças nos jogos (`jogos/`)
@@ -66,6 +72,9 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   só somem fora da tela; as que têm animação de guardar continuam como na 0004. Depois de carregar um save com
   a arma guardada, ela já aparece escondida. A descida segue a câmera (`pparams->up`), então vai para baixo na
   tela olhando em qualquer direção.
+- **`0006-sacar-animacao.patch`**: meio segundo depois de sacar, o cliente não prevê a arma. Com dados de um
+  quadro atrasado, ele achava a arma parada e trocava a animação de sacar pela de parada, e a arma surgia de
+  repente.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)
@@ -152,6 +161,10 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   no `vfs.cfg` do jogo antes de abrir, então valem já na mesma abertura. Ligados por padrão. As pastas
   `<jogo>_addon` (por exemplo, armas trocadas) ficam ao lado de `valve`, `gearbox` e `bshift` e passam na
   frente das `_hd` e das originais.
+- **Campo de visão** e **Campo de visão das armas**: de 60 a 120 (90 é o original), viram `default_fov` e
+  `r_viewmodel_fov`. Menos que 90 aproxima (alvos maiores, menos coisa nas laterais).
+- **Console**: o app sempre passa `-console`, e põe um botão de teclado no alto da tela (`"console"`,
+  `toggleconsole`) em todos os jogos.
 - **Mira assistida**: Desligada, Normal, Forte (padrão) ou Muito forte, vira o `sv_aim_assist` 0 a 3 (só no
   HL, no OF e no BS).
 - **Argumentos extras**: vão no fim da linha de comando, e vencem as opções acima. O botão abre uma janelinha
@@ -166,7 +179,7 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
 - **Números das armas**: no HL, no OF e no BS o app põe botões fixos com os números (`"num1"` a `"num5"`, e
   `"num6"` e `"num7"` no OF, que tem 7 grupos), numa fileira no alto da tela, e liga `hud_fastswitch 1` para o
   toque trocar de arma direto. Tocar de novo no mesmo número passa para a próxima arma do grupo.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +hud_fastswitch 1 +sv_aim_assist 0-3 +exec hlios.cfg`, e
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +hud_fastswitch 1 -console +default_fov +r_viewmodel_fov +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 

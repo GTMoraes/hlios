@@ -1,0 +1,54 @@
+diff --git a/cl_dll/hl/hl_weapons.cpp b/cl_dll/hl/hl_weapons.cpp
+index fb35260..e58cfe1 100644
+--- a/cl_dll/hl/hl_weapons.cpp
++++ b/cl_dll/hl/hl_weapons.cpp
+@@ -32,6 +32,15 @@
+ #include "../com_weapons.h"
+ 
+ extern int g_iHlGuarda; // hlios: view.cpp
++extern float g_flHlSacarAte;
++
++// hlios: meio segundo depois de sacar; a segunda conta protege contra o relógio que zera na troca de mapa
++static bool HL_SacandoArma( void )
++{
++	const float flFalta = g_flHlSacarAte - gEngfuncs.GetClientTime();
++
++	return flFalta > 0.0f && flFalta <= 0.5f;
++}
+ #include "../demo.h"
+ 
+ extern globalvars_t *gpGlobals;
+@@ -840,7 +849,7 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
+ 	// Don't go firing anything if we have died.
+ 	// Or if we don't have a weapon model deployed
+ 	if( ( player.pev->deadflag != ( DEAD_DISCARDBODY + 1 ) ) && 
+-		 !CL_IsDead() && player.pev->viewmodel && !g_iUser1 && !g_iHlGuarda ) // hlios: guardada não prevê tiro
++		 !CL_IsDead() && player.pev->viewmodel && !g_iUser1 && !g_iHlGuarda && !HL_SacandoArma() ) // hlios: guardada (ou recém-sacada) não prevê
+ 	{
+ 		if( player.m_flNextAttack <= 0 )
+ 		{
+diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
+index 4e886d0..4093280 100644
+--- a/cl_dll/view.cpp
++++ b/cl_dll/view.cpp
+@@ -31,6 +31,9 @@
+ // hlios: arma guardada (mensagem HlGuarda do servidor): a arma desce para fora da tela e some
+ int g_iHlGuarda = 0;
+ static float g_flHlGuarda = 0.0f;
++// até quando o cliente não prevê a arma depois de sacar: com dados de um quadro atrasado, ele achava a arma
++// parada e trocava a animação de sacar pela de parada
++float g_flHlSacarAte = 0.0f;
+ 
+ static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
+ {
+@@ -39,7 +42,10 @@ static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
+ 
+ 	// sacar: a animação de sacar da arma já traz ela de baixo; 3: já estava guardada (save carregado)
+ 	if( !g_iHlGuarda )
++	{
+ 		g_flHlGuarda = 0.0f;
++		g_flHlSacarAte = gEngfuncs.GetClientTime() + 0.5f;
++	}
+ 	else if( g_iHlGuarda == 3 )
+ 		g_flHlGuarda = 1.0f;
+ 

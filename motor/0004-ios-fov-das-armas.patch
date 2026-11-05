@@ -1,0 +1,106 @@
+diff --git a/ref/gl/gl_local.h b/ref/gl/gl_local.h
+index 1a9b439..06310a9 100644
+--- a/ref/gl/gl_local.h
++++ b/ref/gl/gl_local.h
+@@ -800,6 +800,7 @@ extern convar_t	r_studio_lambert;
+ extern convar_t	r_detailtextures;
+ extern convar_t	r_novis;
+ extern convar_t	r_nocull;
++extern convar_t	r_viewmodel_fov;
+ extern convar_t	r_lockpvs;
+ extern convar_t	r_lockfrustum;
+ extern convar_t	r_traceglow;
+diff --git a/ref/gl/gl_opengl.c b/ref/gl/gl_opengl.c
+index 9163182..b503de8 100644
+--- a/ref/gl/gl_opengl.c
++++ b/ref/gl/gl_opengl.c
+@@ -28,6 +28,8 @@ CVAR_DEFINE_AUTO( r_lighting_ambient, "0.3", FCVAR_GLCONFIG, "map ambient lighti
+ CVAR_DEFINE_AUTO( r_detailtextures, "1", FCVAR_GLCONFIG, "enable detail textures support" );
+ CVAR_DEFINE_AUTO( r_novis, "0", 0, "ignore vis information (perfomance test)" );
+ CVAR_DEFINE_AUTO( r_nocull, "0", 0, "ignore frustrum culling (perfomance test)" );
++// hlios: campo de visão só da arma em primeira pessoa, na mesma escala do default_fov (0 = o mesmo do mundo)
++CVAR_DEFINE_AUTO( r_viewmodel_fov, "0", FCVAR_ARCHIVE, "view model field of view, like default_fov (0 = same as the world)" );
+ CVAR_DEFINE_AUTO( r_lockpvs, "0", FCVAR_CHEAT, "lockpvs area at current point (pvs test)" );
+ CVAR_DEFINE_AUTO( r_lockfrustum, "0", FCVAR_CHEAT, "lock frustrum area at current point (cull test)" );
+ CVAR_DEFINE_AUTO( r_traceglow, "0", FCVAR_GLCONFIG, "cull flares behind models" );
+@@ -1235,6 +1237,7 @@ static void GL_InitCommands( void )
+ 	gEngfuncs.Cvar_RegisterVariable( &r_lighting_ambient );
+ 	gEngfuncs.Cvar_RegisterVariable( &r_novis );
+ 	gEngfuncs.Cvar_RegisterVariable( &r_nocull );
++	gEngfuncs.Cvar_RegisterVariable( &r_viewmodel_fov );
+ 	gEngfuncs.Cvar_RegisterVariable( &r_detailtextures );
+ 	gEngfuncs.Cvar_RegisterVariable( &r_lockpvs );
+ 	gEngfuncs.Cvar_RegisterVariable( &r_lockfrustum );
+diff --git a/ref/gl/gl_studio.c b/ref/gl/gl_studio.c
+index 39873fb..5e09725 100644
+--- a/ref/gl/gl_studio.c
++++ b/ref/gl/gl_studio.c
+@@ -3319,9 +3319,45 @@ void R_RunViewmodelEvents( void )
+ R_DrawViewModel
+ =================
+ */
++/*
++=============
++R_ViewModelProjection
++
++hlios: projeção própria para a arma em primeira pessoa (r_viewmodel_fov), com o mesmo cálculo do mundo:
++o fov vale para uma tela 4:3 e a tela larga só abre os lados (V_CalcFov e V_AdjustFov no cl_view.c)
++=============
++*/
++static qboolean R_ViewModelProjection( void )
++{
++	matrix4x4 m;
++	float fov = r_viewmodel_fov.value;
++	GLfloat zNear = 4.0f, zFar, yMax, xMax, aspecto;
++
++	if( fov <= 0.0f || FBitSet( RI.rvp.flags, RF_DRAW_OVERVIEW ))
++		return false;
++
++	fov = bound( 10.0f, fov, 170.0f );
++	zFar = Q_max( 256.0f, RI.farClip );
++	aspecto = tan( RI.rvp.fov_x * M_PI_F / 360.0f ) / tan( RI.rvp.fov_y * M_PI_F / 360.0f );
++	yMax = zNear * tan( fov * M_PI_F / 360.0f ) * ( 480.0f / 640.0f );
++	xMax = yMax * aspecto;
++
++	if( tr.rotation & 1 )
++		Matrix4x4_CreateProjection( m, yMax, -yMax, xMax, -xMax, zNear, zFar );
++	else
++		Matrix4x4_CreateProjection( m, xMax, -xMax, yMax, -yMax, zNear, zFar );
++
++	pglMatrixMode( GL_PROJECTION );
++	GL_LoadMatrix( m );
++	pglMatrixMode( GL_MODELVIEW );
++
++	return true;
++}
++
+ void R_DrawViewModel( void )
+ {
+ 	cl_entity_t	*view = tr.viewent;
++	qboolean	fovProprio;
+ 
+ 	R_GatherPlayerLight( view );
+ 
+@@ -3347,6 +3383,7 @@ void R_DrawViewModel( void )
+ 	// adjust the depth range to prevent view model from poking into walls
+ 	pglDepthRange( gldepthmin, gldepthmin + VIEWMODEL_DEPTH_RANGE * ( gldepthmax - gldepthmin ));
+ 	RI.currentmodel = RI.currententity->model;
++	fovProprio = R_ViewModelProjection();
+ 
+ 	switch( RI.currententity->model->type )
+ 	{
+@@ -3361,6 +3398,14 @@ void R_DrawViewModel( void )
+ 
+ 	// restore depth range
+ 	pglDepthRange( gldepthmin, gldepthmax );
++
++	// hlios: volta a projeção do mundo
++	if( fovProprio )
++	{
++		pglMatrixMode( GL_PROJECTION );
++		GL_LoadMatrix( RI.projectionMatrix );
++		pglMatrixMode( GL_MODELVIEW );
++	}
+ }
+ 
+ /*

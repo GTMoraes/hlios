@@ -1,14 +1,28 @@
 diff --git a/engine/common/launcher.c b/engine/common/launcher.c
-index af3aabe..c8e6871 100644
+index af3aabe..ea64569 100644
 --- a/engine/common/launcher.c
 +++ b/engine/common/launcher.c
-@@ -56,6 +56,11 @@ int main( int argc, char **argv )
+@@ -25,6 +25,11 @@ GNU General Public License for more details.
+ #define XASH_GAMEDIR "valve" // !!! Replace with your default (base) game directory !!!
+ #endif
+ 
++#if XASH_IOS
++// hlios: launchdialog.m; manda o app para a tela inicial, com a animação normal, e então o fecha
++void IOS_Encerrar( int codigo );
++#endif
++
+ static int  szArgc;
+ static char **szArgv;
+ 
+@@ -56,6 +61,13 @@ int main( int argc, char **argv )
  	szArgc = argc;
  	szArgv = argv;
  #endif // XASH_PSVITA
 +#if XASH_IOS
-+	// hlios: returning from main on iOS leaves a black screen (SDL keeps the app alive), so close it
-+	exit( Host_Main( szArgc, szArgv, XASH_GAMEDIR, 0, Sys_ChangeGame ));
++	// hlios: returning from main on iOS leaves a black screen (SDL keeps the app alive), so close it,
++	// going back to the home screen with the usual animation
++	IOS_Encerrar( Host_Main( szArgc, szArgv, XASH_GAMEDIR, 0, Sys_ChangeGame ));
++	return 0;
 +#else
  	return Host_Main( szArgc, szArgv, XASH_GAMEDIR, 0, Sys_ChangeGame );
 +#endif
