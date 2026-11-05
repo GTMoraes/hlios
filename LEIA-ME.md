@@ -54,6 +54,11 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 - **`0003-guardar-arma.patch`**: `impulse 200` guarda a arma (animação de guardar e o modelo some) ou saca de
   novo. Guardada, ela não atira, não recarrega, não bate e não lança nada; a lanterna e o "usar" continuam.
   Escolher qualquer arma também saca. O estado vai junto no save.
+- **`0004-guardar-animacao.patch`**: ao guardar, a arma toca a animação de guardar dela (na pistola e na escopeta,
+  a que o modelo tem e o original não usava) e desce para fora da tela em 0,45 s, depois some. Vale para
+  qualquer modelo, inclusive os trocados. Mexe também no cliente (`cl_dll/view.cpp` e `hl_weapons.cpp`): o
+  servidor avisa pela mensagem `HlGuarda`, e o cliente não prevê tiro com a arma guardada. Sacar usa a
+  animação de sacar de cada arma.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)

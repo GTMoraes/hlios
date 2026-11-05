@@ -1,0 +1,199 @@
+diff --git a/cl_dll/hl/hl_weapons.cpp b/cl_dll/hl/hl_weapons.cpp
+index 4f119f0..fb35260 100644
+--- a/cl_dll/hl/hl_weapons.cpp
++++ b/cl_dll/hl/hl_weapons.cpp
+@@ -30,6 +30,8 @@
+ 
+ #include "../hud_iface.h"
+ #include "../com_weapons.h"
++
++extern int g_iHlGuarda; // hlios: view.cpp
+ #include "../demo.h"
+ 
+ extern globalvars_t *gpGlobals;
+@@ -838,7 +840,7 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
+ 	// Don't go firing anything if we have died.
+ 	// Or if we don't have a weapon model deployed
+ 	if( ( player.pev->deadflag != ( DEAD_DISCARDBODY + 1 ) ) && 
+-		 !CL_IsDead() && player.pev->viewmodel && !g_iUser1 )
++		 !CL_IsDead() && player.pev->viewmodel && !g_iUser1 && !g_iHlGuarda ) // hlios: guardada não prevê tiro
+ 	{
+ 		if( player.m_flNextAttack <= 0 )
+ 		{
+diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
+index 3b3187d..fd4e54e 100644
+--- a/cl_dll/view.cpp
++++ b/cl_dll/view.cpp
+@@ -26,6 +26,23 @@
+ #include "shake.h"
+ #include "hltv.h"
+ #include "view.h"
++#include "parsemsg.h"
++
++// hlios: arma guardada (mensagem HlGuarda do servidor): a arma desce para fora da tela e some
++int g_iHlGuarda = 0;
++static float g_flHlGuarda = 0.0f;
++
++static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
++{
++	BEGIN_READ( pbuf, iSize );
++	g_iHlGuarda = READ_BYTE();
++
++	// sacar: a animação de sacar da arma já traz ela de baixo
++	if( !g_iHlGuarda )
++		g_flHlGuarda = 0.0f;
++
++	return 1;
++}
+ 
+ // Spectator Mode
+ extern "C" 
+@@ -769,6 +786,26 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+ 		}
+ 	}
+ 
++	// hlios: arma guardada: desce devagar no começo (dá tempo da animação de guardar) e some no fim
++	if( g_iHlGuarda )
++	{
++		vec3_t vFrente, vDireita, vCima;
++		float s;
++
++		g_flHlGuarda += pparams->frametime / 0.45f;
++		if( g_flHlGuarda > 1.0f )
++			g_flHlGuarda = 1.0f;
++
++		s = g_flHlGuarda * g_flHlGuarda;
++		AngleVectors( view->angles, vFrente, vDireita, vCima );
++
++		for( i = 0; i < 3; i++ )
++			view->origin[i] -= vCima[i] * 16.0f * s + vFrente[i] * 4.0f * s;
++
++		if( g_flHlGuarda >= 1.0f )
++			view->model = NULL;
++	}
++
+ 	if( cl_viewbob && cl_viewbob->value )
+ 	{
+ 		VectorCopy( view->origin, view->curstate.origin );
+@@ -1608,6 +1645,8 @@ void V_Init( void )
+ 	scr_ofsz = gEngfuncs.pfnRegisterVariable( "scr_ofsz","0", 0 );
+ 
+ 	v_centermove = gEngfuncs.pfnRegisterVariable( "v_centermove", "0.15", 0 );
++
++	gEngfuncs.pfnHookUserMsg( "HlGuarda", MsgFunc_HlGuarda ); // hlios
+ 	v_centerspeed = gEngfuncs.pfnRegisterVariable( "v_centerspeed","500", 0 );
+ 
+ 	cl_bobcycle = gEngfuncs.pfnRegisterVariable( "cl_bobcycle","0.8", 0 );// best default for my experimental gun wag (sjb)
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index d5ae360..98b7f46 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -151,6 +151,7 @@ int giPrecacheGrunt = 0;
+ int gmsgShake = 0;
+ int gmsgFade = 0;
+ int gmsgSelAmmo = 0;
++int gmsgHlGuarda = 0; // hlios: arma guardada (o cliente baixa e esconde o modelo)
+ int gmsgFlashlight = 0;
+ int gmsgFlashBattery = 0;
+ int gmsgResetHUD = 0;
+@@ -196,6 +197,7 @@ void LinkUserMessages( void )
+ 	}
+ 
+ 	gmsgSelAmmo = REG_USER_MSG( "SelAmmo", sizeof(SelAmmo) );
++	gmsgHlGuarda = REG_USER_MSG( "HlGuarda", 1 );
+ 	gmsgCurWeapon = REG_USER_MSG( "CurWeapon", 3 );
+ 	gmsgGeigerRange = REG_USER_MSG( "Geiger", 1 );
+ 	gmsgFlashlight = REG_USER_MSG( "Flashlight", 2 );
+@@ -2908,6 +2910,7 @@ ReturnSpot:
+ void CBasePlayer::Spawn( void )
+ {
+ 	m_bArmaGuardada = FALSE;
++	m_iGuardaEnviada = -1;
+ 	m_flStartCharge = gpGlobals->time;
+ 	pev->classname = MAKE_STRING( "player" );
+ 	pev->health = 100;
+@@ -3073,6 +3076,8 @@ int CBasePlayer::Restore( CRestore &restore )
+ 
+ 	int status = restore.ReadFields( "PLAYER", this, m_playerSaveData, ARRAYSIZE( m_playerSaveData ) );
+ 
++	m_iGuardaEnviada = -1; // hlios: o cliente precisa saber de novo se a arma está guardada
++
+ 	SAVERESTOREDATA *pSaveData = (SAVERESTOREDATA *)gpGlobals->pSaveData;
+ 	// landmark isn't present.
+ 	if( !pSaveData->fUseLandmark )
+@@ -3966,14 +3971,12 @@ void CBasePlayer::ItemPostFrame()
+ 	if( !m_pActiveItem )
+ 		return;
+ 
+-	// hlios: arma guardada não atira, não recarrega nem bate; o modelo some depois da animação de guardar
++	// hlios: arma guardada não atira, não recarrega nem bate; o cliente baixa e esconde o modelo em
++	// primeira pessoa, e o de terceira pessoa some depois da animação de guardar
+ 	if( m_bArmaGuardada )
+ 	{
+ 		if( gpGlobals->time >= m_flGuardarTempo )
+-		{
+-			pev->viewmodel = 0;
+ 			pev->weaponmodel = 0;
+-		}
+ 		return;
+ 	}
+ 
+@@ -3996,10 +3999,29 @@ void CBasePlayer::GuardarOuSacarArma( void )
+ 	if( !m_pActiveItem->CanHolster() )
+ 		return;
+ 
++	CBasePlayerWeapon *pArma = (CBasePlayerWeapon *)m_pActiveItem->GetWeaponPtr();
++	const int iModelo = pev->viewmodel, iAnimAntes = pev->weaponanim;
++	int iAnim = -1;
++
+ 	m_pActiveItem->Holster();
++	pev->viewmodel = iModelo; // o cliente é que baixa e esconde (Holster tira o modelo de uma vez)
++
++	// o Holster das armas que têm animação de guardar só manda a animação quando o cliente também prevê;
++	// aqui o cliente não prevê, então ela vai de novo. A pistola e a escopeta não tocam a animação no
++	// original, mas os modelos têm (GLOCK_HOLSTER = 8, SHOTGUN_HOLSTER = 7)
++	if( pev->weaponanim != iAnimAntes )
++		iAnim = pev->weaponanim;
++	else if( m_pActiveItem->m_iId == WEAPON_GLOCK )
++		iAnim = 8;
++	else if( m_pActiveItem->m_iId == WEAPON_SHOTGUN )
++		iAnim = 7;
++
++	if( pArma && iAnim >= 0 )
++		pArma->SendWeaponAnim( iAnim, 0 );
++
+ 	m_bArmaGuardada = TRUE;
+ 	m_flGuardarTempo = gpGlobals->time + 0.5f;
+-	m_flNextAttack = UTIL_WeaponTimeBase() + 0.5f;
++	m_flNextAttack = UTIL_WeaponTimeBase() + 0.6f;
+ }
+ 
+ int CBasePlayer::AmmoInventory( int iAmmoIndex )
+@@ -4134,6 +4156,15 @@ void CBasePlayer::UpdateClientData( void )
+ 		gDisplayTitle = 0;
+ 	}
+ 
++	// hlios: avisa o cliente quando a arma é guardada ou sacada
++	if( m_iGuardaEnviada != ( m_bArmaGuardada ? 1 : 0 ))
++	{
++		m_iGuardaEnviada = m_bArmaGuardada ? 1 : 0;
++		MESSAGE_BEGIN( MSG_ONE, gmsgHlGuarda, NULL, pev );
++			WRITE_BYTE( m_iGuardaEnviada );
++		MESSAGE_END();
++	}
++
+ 	if( pev->health != m_iClientHealth )
+ 	{
+ #define clamp( val, min, max ) ( ((val) > (max)) ? (max) : ( ((val) < (min)) ? (min) : (val) ) )
+diff --git a/dlls/player.h b/dlls/player.h
+index 62b4d98..e267c36 100644
+--- a/dlls/player.h
++++ b/dlls/player.h
+@@ -301,6 +301,7 @@ public:
+ 	BOOL m_bArmaGuardada;
+ 	float m_flGuardarTempo;
+ 	void GuardarOuSacarArma( void );
++	int m_iGuardaEnviada; // o que o cliente sabe (-1: mandar de novo)
+ 	Vector GetAutoaimVector( float flDelta  );
+ 	Vector AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta  );
+ 	BOOL AutoaimAlvoValido( CBaseEntity *pEntity ); // hlios: mira assistida só em inimigos
