@@ -1,5 +1,5 @@
 diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
-index fd4e54e..dd5afd5 100644
+index fd4e54e..4e886d0 100644
 --- a/cl_dll/view.cpp
 +++ b/cl_dll/view.cpp
 @@ -37,9 +37,11 @@ static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
@@ -15,8 +15,11 @@ index fd4e54e..dd5afd5 100644
  
  	return 1;
  }
-@@ -792,7 +794,12 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
- 		vec3_t vFrente, vDireita, vCima;
+@@ -789,18 +791,23 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+ 	// hlios: arma guardada: desce devagar no começo (dá tempo da animação de guardar) e some no fim
+ 	if( g_iHlGuarda )
+ 	{
+-		vec3_t vFrente, vDireita, vCima;
  		float s;
  
 -		g_flHlGuarda += pparams->frametime / 0.45f;
@@ -29,12 +32,15 @@ index fd4e54e..dd5afd5 100644
  		if( g_flHlGuarda > 1.0f )
  			g_flHlGuarda = 1.0f;
  
-@@ -800,7 +807,7 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
- 		AngleVectors( view->angles, vFrente, vDireita, vCima );
- 
+ 		s = g_flHlGuarda * g_flHlGuarda;
+-		AngleVectors( view->angles, vFrente, vDireita, vCima );
+-
++		// para baixo e para trás em relação à câmera (pparams->up e forward), e não aos ângulos do modelo:
++		// o motor guarda a inclinação do modelo com o sinal trocado, e olhando para cima ou para baixo a
++		// arma ia para a frente ou para o alto
  		for( i = 0; i < 3; i++ )
 -			view->origin[i] -= vCima[i] * 16.0f * s + vFrente[i] * 4.0f * s;
-+			view->origin[i] -= vCima[i] * flDistancia * s + vFrente[i] * 4.0f * s;
++			view->origin[i] -= pparams->up[i] * flDistancia * s + pparams->forward[i] * 4.0f * s;
  
  		if( g_flHlGuarda >= 1.0f )
  			view->model = NULL;

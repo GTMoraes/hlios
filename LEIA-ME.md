@@ -64,7 +64,8 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 - **`0005-guardar-descida.patch`**: a pistola deixa de tocar a animação de guardar (a dos modelos dela é ruim) e
   só desce. As armas que só descem (pistola, MP5, hivehand, snark) caem 100 unidades em 0,3 s, acelerando, e
   só somem fora da tela; as que têm animação de guardar continuam como na 0004. Depois de carregar um save com
-  a arma guardada, ela já aparece escondida.
+  a arma guardada, ela já aparece escondida. A descida segue a câmera (`pparams->up`), então vai para baixo na
+  tela olhando em qualquer direção.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)
