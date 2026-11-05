@@ -59,6 +59,10 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   qualquer modelo, inclusive os trocados. Mexe também no cliente (`cl_dll/view.cpp` e `hl_weapons.cpp`): o
   servidor avisa pela mensagem `HlGuarda`, e o cliente não prevê tiro com a arma guardada. Sacar usa a
   animação de sacar de cada arma.
+- **`0005-guardar-descida.patch`**: a pistola deixa de tocar a animação de guardar (a dos modelos dela é ruim) e
+  só desce. As armas que só descem (pistola, MP5, hivehand, snark) vão 40 unidades para baixo em 0,4 s, rápido
+  no meio, e só somem fora da tela; as que têm animação de guardar continuam como na 0004. Depois de carregar
+  um save com a arma guardada, ela já aparece escondida.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)

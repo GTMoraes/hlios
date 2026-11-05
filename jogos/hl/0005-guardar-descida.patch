@@ -1,0 +1,107 @@
+diff --git a/cl_dll/view.cpp b/cl_dll/view.cpp
+index fd4e54e..3cb65a8 100644
+--- a/cl_dll/view.cpp
++++ b/cl_dll/view.cpp
+@@ -37,9 +37,11 @@ static int MsgFunc_HlGuarda( const char *pszName, int iSize, void *pbuf )
+ 	BEGIN_READ( pbuf, iSize );
+ 	g_iHlGuarda = READ_BYTE();
+ 
+-	// sacar: a animação de sacar da arma já traz ela de baixo
++	// sacar: a animação de sacar da arma já traz ela de baixo; 3: já estava guardada (save carregado)
+ 	if( !g_iHlGuarda )
+ 		g_flHlGuarda = 0.0f;
++	else if( g_iHlGuarda == 3 )
++		g_flHlGuarda = 1.0f;
+ 
+ 	return 1;
+ }
+@@ -792,15 +794,20 @@ void V_CalcNormalRefdef( struct ref_params_s *pparams )
+ 		vec3_t vFrente, vDireita, vCima;
+ 		float s;
+ 
+-		g_flHlGuarda += pparams->frametime / 0.45f;
++		// 1: a arma tem animação de guardar, então desce pouco e devagar no começo;
++		// 2 e 3: a arma só desce, então vai rápido e longe o bastante para sair da tela antes de sumir
++		const int bAnimada = ( g_iHlGuarda == 1 );
++		const float flDistancia = bAnimada ? 16.0f : 40.0f;
++
++		g_flHlGuarda += pparams->frametime / ( bAnimada ? 0.45f : 0.4f );
+ 		if( g_flHlGuarda > 1.0f )
+ 			g_flHlGuarda = 1.0f;
+ 
+-		s = g_flHlGuarda * g_flHlGuarda;
++		s = bAnimada ? g_flHlGuarda * g_flHlGuarda : g_flHlGuarda * g_flHlGuarda * ( 3.0f - 2.0f * g_flHlGuarda );
+ 		AngleVectors( view->angles, vFrente, vDireita, vCima );
+ 
+ 		for( i = 0; i < 3; i++ )
+-			view->origin[i] -= vCima[i] * 16.0f * s + vFrente[i] * 4.0f * s;
++			view->origin[i] -= vCima[i] * flDistancia * s + vFrente[i] * 4.0f * s;
+ 
+ 		if( g_flHlGuarda >= 1.0f )
+ 			view->model = NULL;
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index 98b7f46..a0a9114 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -2911,6 +2911,7 @@ void CBasePlayer::Spawn( void )
+ {
+ 	m_bArmaGuardada = FALSE;
+ 	m_iGuardaEnviada = -1;
++	m_iGuardaModo = 0;
+ 	m_flStartCharge = gpGlobals->time;
+ 	pev->classname = MAKE_STRING( "player" );
+ 	pev->health = 100;
+@@ -3077,6 +3078,7 @@ int CBasePlayer::Restore( CRestore &restore )
+ 	int status = restore.ReadFields( "PLAYER", this, m_playerSaveData, ARRAYSIZE( m_playerSaveData ) );
+ 
+ 	m_iGuardaEnviada = -1; // hlios: o cliente precisa saber de novo se a arma está guardada
++	m_iGuardaModo = 3; // e, se estiver, ela já aparece escondida
+ 
+ 	SAVERESTOREDATA *pSaveData = (SAVERESTOREDATA *)gpGlobals->pSaveData;
+ 	// landmark isn't present.
+@@ -4007,18 +4009,17 @@ void CBasePlayer::GuardarOuSacarArma( void )
+ 	pev->viewmodel = iModelo; // o cliente é que baixa e esconde (Holster tira o modelo de uma vez)
+ 
+ 	// o Holster das armas que têm animação de guardar só manda a animação quando o cliente também prevê;
+-	// aqui o cliente não prevê, então ela vai de novo. A pistola e a escopeta não tocam a animação no
+-	// original, mas os modelos têm (GLOCK_HOLSTER = 8, SHOTGUN_HOLSTER = 7)
++	// aqui o cliente não prevê, então ela vai de novo. A escopeta não toca a animação no original, mas
++	// o modelo tem (SHOTGUN_HOLSTER = 7). A pistola só desce: a animação de guardar dos modelos dela é ruim
+ 	if( pev->weaponanim != iAnimAntes )
+ 		iAnim = pev->weaponanim;
+-	else if( m_pActiveItem->m_iId == WEAPON_GLOCK )
+-		iAnim = 8;
+ 	else if( m_pActiveItem->m_iId == WEAPON_SHOTGUN )
+ 		iAnim = 7;
+ 
+ 	if( pArma && iAnim >= 0 )
+ 		pArma->SendWeaponAnim( iAnim, 0 );
+ 
++	m_iGuardaModo = ( iAnim >= 0 ) ? 1 : 2;
+ 	m_bArmaGuardada = TRUE;
+ 	m_flGuardarTempo = gpGlobals->time + 0.5f;
+ 	m_flNextAttack = UTIL_WeaponTimeBase() + 0.6f;
+@@ -4157,9 +4158,9 @@ void CBasePlayer::UpdateClientData( void )
+ 	}
+ 
+ 	// hlios: avisa o cliente quando a arma é guardada ou sacada
+-	if( m_iGuardaEnviada != ( m_bArmaGuardada ? 1 : 0 ))
++	if( m_iGuardaEnviada != ( m_bArmaGuardada ? m_iGuardaModo : 0 ))
+ 	{
+-		m_iGuardaEnviada = m_bArmaGuardada ? 1 : 0;
++		m_iGuardaEnviada = m_bArmaGuardada ? m_iGuardaModo : 0;
+ 		MESSAGE_BEGIN( MSG_ONE, gmsgHlGuarda, NULL, pev );
+ 			WRITE_BYTE( m_iGuardaEnviada );
+ 		MESSAGE_END();
+diff --git a/dlls/player.h b/dlls/player.h
+index e267c36..aa8e6c0 100644
+--- a/dlls/player.h
++++ b/dlls/player.h
+@@ -302,6 +302,7 @@ public:
+ 	float m_flGuardarTempo;
+ 	void GuardarOuSacarArma( void );
+ 	int m_iGuardaEnviada; // o que o cliente sabe (-1: mandar de novo)
++	int m_iGuardaModo; // 1: com animação de guardar, 2: só descendo, 3: já escondida (depois de carregar)
+ 	Vector GetAutoaimVector( float flDelta  );
+ 	Vector AutoaimDeflection( Vector &vecSrc, float flDist, float flDelta  );
+ 	BOOL AutoaimAlvoValido( CBaseEntity *pEntity ); // hlios: mira assistida só em inimigos
