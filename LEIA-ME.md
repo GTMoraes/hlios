@@ -162,7 +162,10 @@ Da pasta da Steam (`Steam\steamapps\common\Half-Life`) para **Arquivos › No Me
   saía travado (flag 2, "não editável"); a partir da 0.1.4 o app tira essa marca sozinho, sem mudar a posição.
 - **Guardar a arma**: no HL, no OF e no BS o app acrescenta também um botão azul no alto (`"guardar"`,
   `impulse 200`), no lugar do spray (que só aparece no multiplayer). Também dá para mover no editor.
-- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +sv_aim_assist 0-3 +exec hlios.cfg`, e
+- **Números das armas**: no HL, no OF e no BS o app põe botões fixos com os números (`"num1"` a `"num5"`, e
+  `"num6"` e `"num7"` no OF, que tem 7 grupos), numa fileira no alto da tela, e liga `hud_fastswitch 1` para o
+  toque trocar de arma direto. Tocar de novo no mesmo número passa para a próxima arma do grupo.
+- Sempre vai junto: `-game <pasta> -log engine.log +voice_enable 0 +gyro_enable 0|1 +touch_look_fire 0|1 +touch_look_fire_time +touch_look_fire_move +hud_fastswitch 1 +sv_aim_assist 0-3 +exec hlios.cfg`, e
   `-dll @hl` no Blue Shift. Sem chat de voz, o app não pede o microfone.
 - O `engine.log` é refeito a cada abertura: depois de um travamento, pegue o log **antes** de abrir o app de novo.
 

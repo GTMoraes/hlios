@@ -190,12 +190,34 @@ static void HL_PrepararPuloLongo( const char *pasta )
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSString *dir = [HL_Docs() stringByAppendingPathComponent:HL_Texto( pasta )];
 	NSString *touch = [dir stringByAppendingPathComponent:@"touch.cfg"];
-	BOOL temGuardar = !strcmp( pasta, "valve" ) || !strcmp( pasta, "gearbox" ) || !strcmp( pasta, "bshift" );
-	NSArray *nomes = temGuardar ? @[ @"pulolongo", @"guardar" ] : @[ @"pulolongo" ];
-	NSArray *botoes = @[
-		@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n",
-		@"touch_addbutton \"guardar\" \"touch_default/show_weapons\" \"impulse 200\" 0.68 0.00 0.76 0.142 120 200 255 200 0 1\n"
-	];
+	BOOL ehHL = !strcmp( pasta, "valve" ) || !strcmp( pasta, "gearbox" ) || !strcmp( pasta, "bshift" );
+	NSMutableArray *nomes = [NSMutableArray arrayWithObject:@"pulolongo"];
+	NSMutableArray *botoes = [NSMutableArray arrayWithObject:
+		@"touch_addbutton \"pulolongo\" \"touch_default/jump\" \"+pulolongo\" 0.64 0.30 0.76 0.53 255 160 0 200 0 1\n"];
+
+	if( ehHL )
+	{
+		// guardar e sacar a arma, no lugar do spray (que só aparece no multiplayer)
+		[nomes addObject:@"guardar"];
+		[botoes addObject:@"touch_addbutton \"guardar\" \"touch_default/show_weapons\" \"impulse 200\" 0.68 0.00 0.76 0.142 120 200 255 200 0 1\n"];
+
+		// números das armas fixos no alto: 5 grupos no HL e no BS, 7 no OF (os dois a mais ficam entre o
+		// botão de editar e o de guardar)
+		{
+			const int grupos = !strcmp( pasta, "gearbox" ) ? 7 : 5;
+			int n;
+
+			for( n = 1; n <= grupos; n++ )
+			{
+				const float x = ( n <= 5 ) ? 0.130f + 0.056f * ( n - 1 ) : 0.500f + 0.056f * ( n - 6 );
+
+				[nomes addObject:[NSString stringWithFormat:@"num%d", n]];
+				[botoes addObject:[NSString stringWithFormat:
+					@"touch_addbutton \"num%d\" \"touch_default/key_%d\" \"slot%d\" %.3f 0 %.3f 0.12 255 255 255 200 0 1\n",
+					n, n, n, x, x + 0.056f]];
+			}
+		}
+	}
 	NSMutableString *cfg = [NSMutableString stringWithString:@"// gerado pelo app: pulo longo (agachar + pular) num botão só\n"
 		@"alias +pulolongo \"+duck;+jump\"\n"
 		@"alias -pulolongo \"-jump;-duck\"\n"];
@@ -373,6 +395,10 @@ static void HL_MontarArgs( const hl_jogo_t *jogo )
 	// mira assistida (patch jogos/*/0001-mira-assistida.patch): só no HL, no OF e no BS
 	if( !strcmp( jogo->pasta, "valve" ) || !strcmp( jogo->pasta, "gearbox" ) || !strcmp( jogo->pasta, "bshift" ))
 	{
+		// os botões de número trocam de arma no toque, sem abrir a lista do grupo
+		[a addObject:@"+hud_fastswitch"];
+		[a addObject:@"1"];
+
 		[a addObject:@"+sv_aim_assist"];
 		[a addObject:[NSString stringWithFormat:@"%d", (int)[p integerForKey:@"hl.mira"]]];
 	}
