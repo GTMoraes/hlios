@@ -1,0 +1,159 @@
+diff --git a/cl_dll/ev_hldm.cpp b/cl_dll/ev_hldm.cpp
+index 3ff5f8e..235fa26 100644
+--- a/cl_dll/ev_hldm.cpp
++++ b/cl_dll/ev_hldm.cpp
+@@ -53,6 +53,20 @@ extern "C"
+ void EV_FireGlock1( struct event_args_s *args );
+ void EV_FireGlock2( struct event_args_s *args );
+ void EV_FireShotGunSingle( struct event_args_s *args );
++// hlios: os furos e faíscas da escopeta na campanha acompanham o número de pellets do servidor
++// (sv_doze_pellets, em dlls/game.cpp)
++static int EV_DozePellets( int original )
++{
++	float m = gEngfuncs.pfnGetCvarFloat( "sv_doze_pellets" );
++	int n;
++
++	if( m <= 0.0f )
++		m = 1.0f;
++
++	n = (int)( original * m + 0.5f );
++	return n < 1 ? 1 : ( n > 64 ? 64 : n );
++}
++
+ void EV_FireShotGunDouble( struct event_args_s *args );
+ void EV_FireMP5( struct event_args_s *args );
+ void EV_FireMP52( struct event_args_s *args );
+@@ -606,7 +620,7 @@ void EV_FireShotGunDouble( event_args_t *args )
+ 	}
+ 	else
+ 	{
+-		EV_HLDM_FireBullets( idx, forward, right, up, 12, vecSrc, vecAiming, 2048, BULLET_PLAYER_BUCKSHOT, 0, &g_tracerCount[idx - 1], 0.08716, 0.08716 );
++		EV_HLDM_FireBullets( idx, forward, right, up, EV_DozePellets( 12 ), vecSrc, vecAiming, 2048, BULLET_PLAYER_BUCKSHOT, 0, &g_tracerCount[idx - 1], 0.08716, 0.08716 );
+ 	}
+ }
+ 
+@@ -658,7 +672,7 @@ void EV_FireShotGunSingle( event_args_t *args )
+ 	}
+ 	else
+ 	{
+-		EV_HLDM_FireBullets( idx, forward, right, up, 6, vecSrc, vecAiming, 2048, BULLET_PLAYER_BUCKSHOT, 0, &g_tracerCount[idx - 1], 0.08716, 0.08716 );
++		EV_HLDM_FireBullets( idx, forward, right, up, EV_DozePellets( 6 ), vecSrc, vecAiming, 2048, BULLET_PLAYER_BUCKSHOT, 0, &g_tracerCount[idx - 1], 0.08716, 0.08716 );
+ 	}
+ }
+ //======================
+diff --git a/dlls/combat.cpp b/dlls/combat.cpp
+index 70c6016..a7be851 100644
+--- a/dlls/combat.cpp
++++ b/dlls/combat.cpp
+@@ -30,6 +30,7 @@
+ #include "weapons.h"
+ #include "func_break.h"
+ #include "game.h"
++#include "gamerules.h"
+ 
+ extern DLL_GLOBAL Vector		g_vecAttackDir;
+ extern DLL_GLOBAL int			g_iSkillLevel;
+@@ -1537,7 +1538,9 @@ Vector CBaseEntity::FireBulletsPlayer( ULONG cShots, Vector vecSrc, Vector vecDi
+ 				break;
+ 			case BULLET_PLAYER_BUCKSHOT:
+ 				 // make distance based!
+-				pEntity->TraceAttack( pevAttacker, gSkillData.plrDmgBuckshot, vecDir, &tr, DMG_BULLET );
++				// hlios: na campanha, o dano de cada pellet segue sv_doze_pellets e sv_doze_dano (game.cpp)
++				pEntity->TraceAttack( pevAttacker, gSkillData.plrDmgBuckshot *
++					( g_pGameRules->IsMultiplayer() ? 1.0f : HL_DozeFatorDano() ), vecDir, &tr, DMG_BULLET );
+ 				break;
+ 			case BULLET_PLAYER_357:
+ 				pEntity->TraceAttack( pevAttacker, gSkillData.plrDmg357, vecDir, &tr, DMG_BULLET );
+diff --git a/dlls/game.cpp b/dlls/game.cpp
+index 5c1edfb..9088007 100644
+--- a/dlls/game.cpp
++++ b/dlls/game.cpp
+@@ -25,6 +25,29 @@ cvar_t displaysoundlist = {"displaysoundlist","0"};
+ // hlios: mira assistida para controles de toque (0 = como o original; 1, 2, 3 = força, vale também no Difícil)
+ cvar_t sv_aim_assist = { "sv_aim_assist", "0", FCVAR_SERVER };
+ 
++// hlios: escopeta do jogador na campanha. sv_doze_pellets multiplica os pellets de cada tiro (6 no simples,
++// 12 no duplo) e sv_doze_dano multiplica o dano cheio (todos os pellets pegando), que se divide entre eles.
++// 1 e 1 é o original
++cvar_t sv_doze_pellets = { "sv_doze_pellets", "2", FCVAR_SERVER | FCVAR_ARCHIVE };
++cvar_t sv_doze_dano = { "sv_doze_dano", "1.5", FCVAR_SERVER | FCVAR_ARCHIVE };
++
++// quantos pellets saem num tiro que no original solta "original" (de 1 a 64)
++int HL_DozePellets( int original )
++{
++	int n = (int)( original * sv_doze_pellets.value + 0.5f );
++
++	return n < 1 ? 1 : ( n > 64 ? 64 : n );
++}
++
++// o dano de cada pellet, em vezes o do skill.cfg: o dano cheio do tiro simples vezes sv_doze_dano, dividido
++// entre os pellets dele
++float HL_DozeFatorDano( void )
++{
++	float dano = sv_doze_dano.value > 0.0f ? sv_doze_dano.value : 0.0f;
++
++	return dano * 6.0f / (float)HL_DozePellets( 6 );
++}
++
+ // multiplayer server rules
+ cvar_t fragsleft	= { "mp_fragsleft","0", FCVAR_SERVER | FCVAR_UNLOGGED };	  // Don't spam console/log files/users with this changing
+ cvar_t timeleft		= { "mp_timeleft","0" , FCVAR_SERVER | FCVAR_UNLOGGED };	  // "      "
+@@ -747,6 +770,8 @@ void GameDLLInit( void )
+ 
+ 	CVAR_REGISTER( &displaysoundlist );
+ 	CVAR_REGISTER( &sv_aim_assist );
++	CVAR_REGISTER( &sv_doze_pellets );
++	CVAR_REGISTER( &sv_doze_dano );
+ 	CVAR_REGISTER( &allow_spectators );
+ 
+ 	CVAR_REGISTER( &teamplay );
+diff --git a/dlls/game.h b/dlls/game.h
+index 2abcca0..fe2fc4f 100644
+--- a/dlls/game.h
++++ b/dlls/game.h
+@@ -20,6 +20,10 @@ extern void GameDLLInit( void );
+ 
+ extern cvar_t displaysoundlist;
+ extern cvar_t sv_aim_assist;
++extern cvar_t sv_doze_pellets;
++extern cvar_t sv_doze_dano;
++int HL_DozePellets( int original );
++float HL_DozeFatorDano( void );
+ 
+ // multiplayer server rules
+ extern cvar_t teamplay;
+diff --git a/dlls/shotgun.cpp b/dlls/shotgun.cpp
+index 7b263a2..47f7f9e 100644
+--- a/dlls/shotgun.cpp
++++ b/dlls/shotgun.cpp
+@@ -21,6 +21,12 @@
+ #include "nodes.h"
+ #include "player.h"
+ #include "gamerules.h"
++#if !CLIENT_DLL
++#include "game.h"
++#else
++// hlios: a previsão do cliente não usa o número de pellets
++#define HL_DozePellets( n ) ( n )
++#endif
+ 
+ // special deathmatch shotgun spreads
+ #define VECTOR_CONE_DM_SHOTGUN	Vector( 0.08716, 0.04362, 0.00 )// 10 degrees by 5 degrees
+@@ -163,7 +169,7 @@ void CShotgun::PrimaryAttack()
+ 	else
+ 	{
+ 		// regular old, untouched spread. 
+-		vecDir = m_pPlayer->FireBulletsPlayer( 6, vecSrc, vecAiming, VECTOR_CONE_10DEGREES, 2048, BULLET_PLAYER_BUCKSHOT, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
++		vecDir = m_pPlayer->FireBulletsPlayer( HL_DozePellets( 6 ), vecSrc, vecAiming, VECTOR_CONE_10DEGREES, 2048, BULLET_PLAYER_BUCKSHOT, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
+ 	}
+ 
+ 	PLAYBACK_EVENT_FULL( flags, m_pPlayer->edict(), m_usSingleFire, 0.0, g_vecZero, g_vecZero, vecDir.x, vecDir.y, 0, 0, 0, 0 );
+@@ -234,7 +240,7 @@ void CShotgun::SecondaryAttack( void )
+ 	else
+ 	{
+ 		// untouched default single player
+-		vecDir = m_pPlayer->FireBulletsPlayer( 12, vecSrc, vecAiming, VECTOR_CONE_10DEGREES, 2048, BULLET_PLAYER_BUCKSHOT, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
++		vecDir = m_pPlayer->FireBulletsPlayer( HL_DozePellets( 12 ), vecSrc, vecAiming, VECTOR_CONE_10DEGREES, 2048, BULLET_PLAYER_BUCKSHOT, 0, 0, m_pPlayer->pev, m_pPlayer->random_seed );
+ 	}
+ 
+ 	PLAYBACK_EVENT_FULL( flags, m_pPlayer->edict(), m_usDoubleFire, 0.0f, g_vecZero, g_vecZero, vecDir.x, vecDir.y, 0, 0, 0, 0 );

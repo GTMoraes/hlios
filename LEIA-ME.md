@@ -98,6 +98,12 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   da câmera, na mesma linha de visão, na proporção que o motor passa em `r_viewmodel_escala`: eles caem na boca
   do cano e o clarão cresce junto com a arma. A menos de 6 unidades da câmera ele seria cortado; aí para ali e
   se afasta do centro da vista o que falta, ficando no lugar certo e um pouco menor.
+- **`0008-escopeta-pellets.patch`**: a escopeta do jogador na campanha (no multiplayer fica a original). A cvar
+  `sv_doze_pellets` (padrão 2) multiplica os pellets de cada tiro (6 no simples e 12 no duplo, no original), e
+  `sv_doze_dano` (padrão 1.5) multiplica o dano cheio, com todos os pellets pegando, que se divide entre eles.
+  No padrão: 12 pellets e 45 de dano cheio no simples, 24 e 90 no duplo (3,75 por pellet, com o
+  `sk_plr_buckshot` 5 do `skill.cfg`). O dano por pellet acompanha o `skill.cfg`, e os furos e faíscas do
+  cliente acompanham o número de pellets. `1` e `1` voltam ao original. As duas ficam salvas no `config.cfg`.
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)
