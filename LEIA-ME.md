@@ -62,7 +62,10 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
 6. **`0006-ios-botoes-padrao.patch`**: o padrão dos botões de toque (o de um jogo sem `touch.cfg` e o do Reset
    no menu Touch) passa a vir do `touch_padrao.cfg` da pasta do jogo, quando ele existe. O app grava esse
    arquivo no HL, no OF e no BS a cada abertura.
-7. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
+7. **`0007-ios-municao-grande.patch`**: os campos `ammo_*` e `vuser*` do `clientdata_t` (que levam a munição
+   para a previsão de tiro e recarga do cliente) ganham bits para valores até 32767, seja qual for o
+   `delta.lst` do jogo. Com as reservas maiores (patch 0009 do HL e do OF), 750 balas não cabiam neles.
+8. **`launchdialog.m`**: tela inicial com a escolha do jogo e as opções, no lugar da caixa de texto do port.
    Compilado sem ARC, como o original.
 
 ### Mudanças nos jogos (`jogos/`)
@@ -104,6 +107,13 @@ vem do segredo `APP_ICON_PNG`. O `.gitignore` bloqueia as pastas dos jogos, `.pn
   No padrão: 12 pellets e 45 de dano cheio no simples, 24 e 90 no duplo (3,75 por pellet, com o
   `sk_plr_buckshot` 5 do `skill.cfg`). O dano por pellet acompanha o `skill.cfg`, e os furos e faíscas do
   cliente acompanham o número de pellets. `1` e `1` voltam ao original. As duas ficam salvas no `config.cfg`.
+- **`0009-reserva-municao.patch`**: reservas de munição. `sv_municao` (padrão 3) multiplica a reserva máxima
+  de todas as munições, granadas e explosivos incluídos, e também a capacidade da Hornet Gun e da Shock Rifle,
+  que recarregam sozinhas; `sv_municao_uranio` (padrão 500) é a do urânio (gauss e egon). Os carregadores não
+  mudam. Valem a partir do próximo mapa ou save carregado e ficam salvas no `config.cfg`; `1` e `100` voltam ao
+  original. Como 750 balas não cabem num byte, as mensagens `AmmoX` e `WeaponList` passam a levar a quantidade
+  e o máximo em short (servidor e HUD juntos), e o motor alarga os campos de munição do clientdata (patch
+  `motor/0007`).
 - O `scripts/compilar-jogos.sh` aplica `jogos/<nome>/*.patch`, em ordem, depois de baixar cada hlsdk.
 
 ### Mudança no Counter-Strike (`cs16/`)

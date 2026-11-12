@@ -1,0 +1,168 @@
+diff --git a/cl_dll/ammo.cpp b/cl_dll/ammo.cpp
+index 6d4b852..8fab886 100644
+--- a/cl_dll/ammo.cpp
++++ b/cl_dll/ammo.cpp
+@@ -488,7 +488,7 @@ int CHudAmmo::MsgFunc_AmmoX( const char *pszName, int iSize, void *pbuf )
+ 	BEGIN_READ( pbuf, iSize );
+ 
+ 	int iIndex = READ_BYTE();
+-	int iCount = READ_BYTE();
++	int iCount = READ_SHORT(); // hlios: short (reservas maiores)
+ 
+ 	gWR.SetAmmo( iIndex, abs( iCount ) );
+ 
+@@ -649,13 +649,13 @@ int CHudAmmo::MsgFunc_WeaponList( const char *pszName, int iSize, void *pbuf )
+ 
+ 	Weapon.iAmmoType = (int)READ_CHAR();	
+ 	
+-	Weapon.iMax1 = READ_BYTE();
+-	if( Weapon.iMax1 == 255 )
++	Weapon.iMax1 = READ_SHORT(); // hlios: short (reservas maiores)
++	if( Weapon.iMax1 == 255 || Weapon.iMax1 < 0 )
+ 		Weapon.iMax1 = -1;
+ 
+ 	Weapon.iAmmo2Type = READ_CHAR();
+-	Weapon.iMax2 = READ_BYTE();
+-	if( Weapon.iMax2 == 255 )
++	Weapon.iMax2 = READ_SHORT(); // hlios: short (reservas maiores)
++	if( Weapon.iMax2 == 255 || Weapon.iMax2 < 0 )
+ 		Weapon.iMax2 = -1;
+ 
+ 	Weapon.iSlot = READ_CHAR();
+diff --git a/dlls/game.cpp b/dlls/game.cpp
+index 4305ffe..7842631 100644
+--- a/dlls/game.cpp
++++ b/dlls/game.cpp
+@@ -31,6 +31,26 @@ cvar_t sv_aim_assist = { "sv_aim_assist", "0", FCVAR_SERVER };
+ cvar_t sv_doze_pellets = { "sv_doze_pellets", "2", FCVAR_SERVER | FCVAR_ARCHIVE };
+ cvar_t sv_doze_dano = { "sv_doze_dano", "1.5", FCVAR_SERVER | FCVAR_ARCHIVE };
+ 
++// hlios: reservas de munição (weapons.h): sv_municao multiplica todas e sv_municao_uranio é a do urânio
++cvar_t sv_municao = { "sv_municao", "3", FCVAR_SERVER | FCVAR_ARCHIVE };
++cvar_t sv_municao_uranio = { "sv_municao_uranio", "500", FCVAR_SERVER | FCVAR_ARCHIVE };
++
++int HL_Reserva( int original )
++{
++	float m = sv_municao.value > 0.0f ? sv_municao.value : 1.0f;
++	int n = (int)( original * m + 0.5f );
++
++	// o HUD e o clientdata levam até 32767 (patch 0007 do motor)
++	return n < 1 ? 1 : ( n > 9999 ? 9999 : n );
++}
++
++int HL_ReservaUranio( int original )
++{
++	int n = (int)( sv_municao_uranio.value + 0.5f );
++
++	return n < 1 ? original : ( n > 9999 ? 9999 : n );
++}
++
+ // quantos pellets saem num tiro que no original solta "original" (de 1 a 64)
+ int HL_DozePellets( int original )
+ {
+@@ -516,6 +536,8 @@ void GameDLLInit( void )
+ 	CVAR_REGISTER( &sv_aim_assist );
+ 	CVAR_REGISTER( &sv_doze_pellets );
+ 	CVAR_REGISTER( &sv_doze_dano );
++	CVAR_REGISTER( &sv_municao );
++	CVAR_REGISTER( &sv_municao_uranio );
+ 	CVAR_REGISTER( &allow_spectators );
+ 
+ 	CVAR_REGISTER( &teamplay );
+diff --git a/dlls/game.h b/dlls/game.h
+index fe2fc4f..ba93f99 100644
+--- a/dlls/game.h
++++ b/dlls/game.h
+@@ -22,6 +22,8 @@ extern cvar_t displaysoundlist;
+ extern cvar_t sv_aim_assist;
+ extern cvar_t sv_doze_pellets;
+ extern cvar_t sv_doze_dano;
++extern cvar_t sv_municao;
++extern cvar_t sv_municao_uranio;
+ int HL_DozePellets( int original );
+ float HL_DozeFatorDano( void );
+ 
+diff --git a/dlls/player.cpp b/dlls/player.cpp
+index a0a9114..c441e78 100644
+--- a/dlls/player.cpp
++++ b/dlls/player.cpp
+@@ -229,7 +229,7 @@ void LinkUserMessages( void )
+ 	gmsgShowMenu = REG_USER_MSG( "ShowMenu", -1 );
+ 	gmsgShake = REG_USER_MSG( "ScreenShake", sizeof(ScreenShake) );
+ 	gmsgFade = REG_USER_MSG( "ScreenFade", sizeof(ScreenFade) );
+-	gmsgAmmoX = REG_USER_MSG( "AmmoX", 2 );
++	gmsgAmmoX = REG_USER_MSG( "AmmoX", 3 ); // hlios: a quantidade vai em short (reservas maiores)
+ 	gmsgTeamNames = REG_USER_MSG( "TeamNames", -1 );
+ 
+ 	gmsgStatusText = REG_USER_MSG( "StatusText", -1 );
+@@ -4070,7 +4070,7 @@ void CBasePlayer::SendAmmoUpdate( void )
+ 			// send "Ammo" update message
+ 			MESSAGE_BEGIN( MSG_ONE, gmsgAmmoX, NULL, pev );
+ 				WRITE_BYTE( i );
+-				WRITE_BYTE( Q_max( Q_min( m_rgAmmo[i], 254 ), 0 ) );  // clamp the value to one byte
++				WRITE_SHORT( Q_max( Q_min( m_rgAmmo[i], 32767 ), 0 ) );  // hlios: short (reservas maiores)
+ 			MESSAGE_END();
+ 		}
+ 	}
+@@ -4308,9 +4308,9 @@ void CBasePlayer::UpdateClientData( void )
+ 			MESSAGE_BEGIN( MSG_ONE, gmsgWeaponList, NULL, pev );  
+ 				WRITE_STRING( pszName );			// string	weapon name
+ 				WRITE_BYTE( GetAmmoIndex( II.pszAmmo1 ) );	// byte		Ammo Type
+-				WRITE_BYTE( II.iMaxAmmo1 );				// byte     Max Ammo 1
++				WRITE_SHORT( II.iMaxAmmo1 );	// hlios: short (reservas maiores)				// byte     Max Ammo 1
+ 				WRITE_BYTE( GetAmmoIndex( II.pszAmmo2 ) );	// byte		Ammo2 Type
+-				WRITE_BYTE( II.iMaxAmmo2 );				// byte     Max Ammo 2
++				WRITE_SHORT( II.iMaxAmmo2 );	// hlios: short (reservas maiores)				// byte     Max Ammo 2
+ 				WRITE_BYTE( II.iSlot );					// byte		bucket
+ 				WRITE_BYTE( II.iPosition );				// byte		bucket pos
+ 				WRITE_BYTE( II.iId );						// byte		id (bit index into pev->weapons)
+diff --git a/dlls/weapons.h b/dlls/weapons.h
+index b87e64d..96fea3d 100644
+--- a/dlls/weapons.h
++++ b/dlls/weapons.h
+@@ -106,20 +106,31 @@ public:
+ #define TRIPMINE_WEIGHT		-10
+ 
+ // weapon clip/carry ammo capacities
+-#define URANIUM_MAX_CARRY		100
+-#define	_9MM_MAX_CARRY			250
+-#define _357_MAX_CARRY			36
+-#define BUCKSHOT_MAX_CARRY		125
+-#define BOLT_MAX_CARRY			50
+-#define ROCKET_MAX_CARRY		5
+-#define HANDGRENADE_MAX_CARRY	10
+-#define BIGLOLLY_HANDGRENADE_MAX_CARRY	6
+-#define SATCHEL_MAX_CARRY		5
+-#define TRIPMINE_MAX_CARRY		5
+-#define SNARK_MAX_CARRY			15
+-#define BIGLOLLY_SNARK_MAX_CARRY	12
+-#define HORNET_MAX_CARRY		8
+-#define M203_GRENADE_MAX_CARRY	10
++// hlios: reservas de munição. sv_municao multiplica todas (padrão 3; as da Hornet Gun e da Shock Rifle, que
++// recarregam sozinhas, também) e sv_municao_uranio é a do urânio (padrão 500). Valem a partir do próximo mapa ou
++// save carregado. Os carregadores não mudam. No cliente (previsão) ficam os padrões
++#if CLIENT_DLL
++#define HL_Reserva( n )		( ( n ) * 3 )
++#define HL_ReservaUranio( n )	500
++#else
++int HL_Reserva( int original );
++int HL_ReservaUranio( int original );
++#endif
++
++#define URANIUM_MAX_CARRY		HL_ReservaUranio( 100 )
++#define _9MM_MAX_CARRY			HL_Reserva( 250 )
++#define _357_MAX_CARRY			HL_Reserva( 36 )
++#define BUCKSHOT_MAX_CARRY		HL_Reserva( 125 )
++#define BOLT_MAX_CARRY			HL_Reserva( 50 )
++#define ROCKET_MAX_CARRY		HL_Reserva( 5 )
++#define HANDGRENADE_MAX_CARRY	HL_Reserva( 10 )
++#define BIGLOLLY_HANDGRENADE_MAX_CARRY	HL_Reserva( 6 )
++#define SATCHEL_MAX_CARRY		HL_Reserva( 5 )
++#define TRIPMINE_MAX_CARRY		HL_Reserva( 5 )
++#define SNARK_MAX_CARRY			HL_Reserva( 15 )
++#define BIGLOLLY_SNARK_MAX_CARRY	HL_Reserva( 12 )
++#define HORNET_MAX_CARRY		HL_Reserva( 8 )
++#define M203_GRENADE_MAX_CARRY	HL_Reserva( 10 )
+ 
+ // the maximum amount of ammo each weapon's clip can hold
+ #define WEAPON_NOCLIP			-1

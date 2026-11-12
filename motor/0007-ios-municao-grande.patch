@@ -1,0 +1,29 @@
+diff --git a/engine/common/net_encode.c b/engine/common/net_encode.c
+index 64bc35e..a848700 100644
+--- a/engine/common/net_encode.c
++++ b/engine/common/net_encode.c
+@@ -761,6 +761,24 @@ static qboolean Delta_ParseField( char **delta_script, const delta_info_t *dt, d
+ 
+ 	pField->multiplier = Q_atof( token );
+ 
++	// hlios: as reservas de munição maiores (patch 0009 do HL e do OF) passam pelos campos ammo_* e vuser* do
++	// clientdata, e com os poucos bits do delta.lst 750 balas viram outro número no cliente (e a previsão das
++	// recargas falha). Aqui eles ganham espaço até 32767, já contando o multiplicador do campo
++	if( !Q_strcmp( dt->pName, "clientdata_t" ) && ( !Q_strncmp( pField->name, "ammo_", 5 ) || !Q_strncmp( pField->name, "vuser", 5 )))
++	{
++		float m = fabs( pField->multiplier );
++		int precisa = FBitSet( pField->flags, DT_SIGNED ) ? 17 : 16;
++
++		while( m > 1.0f && precisa < 32 )
++		{
++			m *= 0.5f;
++			precisa++;
++		}
++
++		if( pField->bits < precisa )
++			pField->bits = precisa;
++	}
++
+ 	if( bPost )
+ 	{
+ 		*delta_script = COM_ParseFile( *delta_script, token, sizeof( token ));

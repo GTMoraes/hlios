@@ -13,6 +13,7 @@ cd "$TRAB/xash"
 #    0004 campo de visão só da arma em primeira pessoa (cvar r_viewmodel_fov), e o fov e a posição da arma na mão (fov_arma, arma_frente, arma_lado, arma_altura)
 #    0005 as barras de campo de visão no menu do jogo (3rdparty/mainui, Video options)
 #    0006 o padrão dos botões de toque vem do touch_padrao.cfg do jogo, quando tem (o app grava)
+#    0007 os campos de munição do clientdata aceitam valores grandes (reservas maiores)
 for p in "$RAIZ"/motor/*.patch; do
 	git apply --verbose "$p"
 done
